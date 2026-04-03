@@ -1,0 +1,4 @@
+SRTrain>=2.0.2
+python-dotenv
+rich
+questionary
