@@ -1,4 +1,3 @@
 SRTrain @ git+https://github.com/ryanking13/SRT.git
 python-dotenv
 flask
-flask-session
