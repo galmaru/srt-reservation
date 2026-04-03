@@ -28,12 +28,15 @@ def login(srt_id: str, srt_pw: str) -> SRT:
     return SRT(srt_id, srt_pw, netfunnel_helper=netfunnel)
 
 
-def search_trains(srt: SRT, dep: str, arr: str, date: str, time: str, available_only: bool = True):
+def search_trains(srt: SRT, dep: str, arr: str, date: str, time: str, available_only: bool = False):
     """
     열차 검색
     date: yyyyMMdd 형식 (예: 20260403)
     time: HHmmss 형식 (예: 080000)
+    available_only: False면 매진 열차도 표시 (기본값)
     """
+    # 매 검색마다 NetFunnel 캐시를 초기화해 "Wrong Server ID" 에러 방지
+    srt.netfunnel_helper = NetFunnelHelper()
     return srt.search_train(dep, arr, date=date, time=time, available_only=available_only)
 
 
