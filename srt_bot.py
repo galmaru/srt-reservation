@@ -3,6 +3,7 @@
 from SRT import SRT
 from SRT.passenger import Adult, Child, Senior
 from SRT.seat_type import SeatType
+from SRT.netfunnel import NetFunnelHelper
 
 STATIONS = [
     "수서", "동탄", "평택지제", "천안아산", "오송",
@@ -22,8 +23,9 @@ SEAT_TYPE_MAP = {
 
 
 def login(srt_id: str, srt_pw: str) -> SRT:
-    """SRT 로그인"""
-    return SRT(srt_id, srt_pw)
+    """SRT 로그인 (NetFunnel 대기열 우회 포함)"""
+    netfunnel = NetFunnelHelper()
+    return SRT(srt_id, srt_pw, netfunnel_helper=netfunnel)
 
 
 def search_trains(srt: SRT, dep: str, arr: str, date: str, time: str, available_only: bool = True):

@@ -175,4 +175,5 @@ def cancel(res_number):
 
 
 if __name__ == "__main__":
+    os.makedirs("/tmp/srt_sessions", exist_ok=True)
     app.run(debug=True, port=5001)

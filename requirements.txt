@@ -1,4 +1,4 @@
-SRTrain>=2.0.2
+SRTrain @ git+https://github.com/ryanking13/SRT.git
 python-dotenv
-rich
-questionary
+flask
+flask-session
