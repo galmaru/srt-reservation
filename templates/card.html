@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="max-width: 480px; margin: 0 auto;">
+  <div class="card">
+    <div class="card-title">💳 카드 정보 설정</div>
+
+    <div class="alert alert-info" style="margin-bottom: 20px; font-size: 0.88rem;">
+      카드 정보는 이 기기의 쿠키에만 저장되며, 서버에는 기록되지 않습니다.
+      예매 즉시 자동 결제에 사용됩니다.
+    </div>
+
+    {% if saved %}
+    <div class="alert alert-success">✅ 카드 정보가 저장되어 있습니다. 예매 시 자동 결제됩니다.</div>
+    {% endif %}
+
+    {% if error %}
+    <div class="alert alert-error">⚠ {{ error }}</div>
+    {% endif %}
+
+    <form method="POST" action="{{ url_for('card_settings') }}">
+      <div class="form-group">
+        <label>카드번호 (16자리, 하이픈 없이)</label>
+        <input type="password" name="card_number" placeholder="1234567890123456"
+               maxlength="16" required autocomplete="cc-number"
+               value="{{ card_number or '' }}">
+      </div>
+      <div class="grid-2">
+        <div class="form-group">
+          <label>카드 비밀번호 앞 2자리</label>
+          <input type="password" name="card_password" placeholder="••" maxlength="2" required
+                 value="{{ card_password or '' }}">
+        </div>
+        <div class="form-group">
+          <label>유효기간 (YYMM)</label>
+          <input type="text" name="card_expire" placeholder="2612" maxlength="4" required
+                 autocomplete="cc-exp" value="{{ card_expire or '' }}">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>생년월일(6자리) 또는 사업자번호(10자리)</label>
+        <input type="password" name="card_validation" placeholder="주민번호 앞 6자리"
+               maxlength="10" required value="{{ card_validation or '' }}">
+      </div>
+      <div class="form-group">
+        <label>할부 개월 (0 = 일시불)</label>
+        <select name="installment">
+          {% for m in [0,2,3,4,5,6,7,8,9,10,11,12,24] %}
+          <option value="{{ m }}" {% if (card_installment|string) == (m|string) %}selected{% endif %}>
+            {% if m == 0 %}일시불{% else %}{{ m }}개월{% endif %}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <button type="submit" class="btn btn-primary">카드 정보 저장</button>
+    </form>
+
+    {% if saved %}
+    <form method="POST" action="{{ url_for('card_clear') }}" style="margin-top: 12px;">
+      <button type="submit" class="btn btn-danger" style="width:100%;">저장된 카드 정보 삭제</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

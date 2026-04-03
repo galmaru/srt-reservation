@@ -28,6 +28,24 @@ def get_srt():
         return None
 
 
+def auto_pay_if_saved(srt, reservation):
+    """저장된 카드 정보로 자동 결제. 성공 시 True, 카드 없으면 None, 실패 시 에러 문자열 반환."""
+    if not session.get("card_saved"):
+        return None
+    try:
+        srt_bot.pay_reservation(
+            srt, reservation,
+            card_number=session["card_number"],
+            card_password=session["card_password"],
+            card_validation_number=session["card_validation"],
+            card_expire_date=session["card_expire"],
+            installment=int(session.get("card_installment", 0)),
+        )
+        return True
+    except Exception as e:
+        return str(e)
+
+
 # ──────────────────────────────────────────────
 # 라우트
 # ──────────────────────────────────────────────
@@ -121,7 +139,12 @@ def reserve():
         try:
             reservation = srt_bot.make_reservation(srt, train, adult_count, seat_type)
             session["reservation_id"] = str(reservation.reservation_number)
-            return render_template("reserve_result.html", reservation=reservation, success=True)
+            pay_result = auto_pay_if_saved(srt, reservation)
+            return render_template(
+                "reserve_result.html", reservation=reservation, success=True,
+                pay_success=(pay_result is True),
+                pay_error=(pay_result if isinstance(pay_result, str) else None),
+            )
         except Exception as e:
             return render_template("reserve_result.html", error=str(e), success=False)
 
@@ -172,9 +195,12 @@ def watch_poll():
         if target.seat_available():
             reservation = srt_bot.make_reservation(srt, target, adult_count, seat_type)
             session["reservation_id"] = str(reservation.reservation_number)
+            pay_result = auto_pay_if_saved(srt, reservation)
             return jsonify({
                 "status": "done",
                 "reservation_number": str(reservation.reservation_number),
+                "auto_paid": pay_result is True,
+                "pay_error": pay_result if isinstance(pay_result, str) else None,
             })
 
         general = "일반실 가능" if target.general_seat_available else "일반실 매진"
@@ -186,6 +212,57 @@ def watch_poll():
 
     except Exception as e:
         return jsonify({"status": "waiting", "message": f"오류: {e} — 재시도 중..."})
+
+
+@app.route("/card", methods=["GET", "POST"])
+def card_settings():
+    if not session.get("srt_id"):
+        return redirect(url_for("index"))
+
+    if request.method == "POST":
+        card_number = request.form.get("card_number", "").replace("-", "").replace(" ", "")
+        card_password = request.form.get("card_password", "")
+        card_validation = request.form.get("card_validation", "")
+        card_expire = request.form.get("card_expire", "").replace("/", "")
+        installment = request.form.get("installment", "0")
+
+        if len(card_number) != 16 or not card_number.isdigit():
+            return render_template("card.html", error="카드번호는 16자리 숫자여야 합니다.",
+                                   saved=session.get("card_saved"))
+        if len(card_password) != 2:
+            return render_template("card.html", error="카드 비밀번호는 2자리여야 합니다.",
+                                   saved=session.get("card_saved"))
+        if len(card_expire) != 4 or not card_expire.isdigit():
+            return render_template("card.html", error="유효기간은 YYMM 4자리 숫자여야 합니다.",
+                                   saved=session.get("card_saved"))
+
+        session["card_number"] = card_number
+        session["card_password"] = card_password
+        session["card_validation"] = card_validation
+        session["card_expire"] = card_expire
+        session["card_installment"] = installment
+        session["card_saved"] = True
+        session.modified = True
+
+        return render_template("card.html", saved=True,
+                               card_number="*" * 12 + card_number[-4:],
+                               card_expire=card_expire,
+                               card_installment=installment)
+
+    return render_template("card.html",
+                           saved=session.get("card_saved", False),
+                           card_number=("*" * 12 + session["card_number"][-4:]) if session.get("card_saved") else "",
+                           card_expire=session.get("card_expire", ""),
+                           card_installment=session.get("card_installment", "0"))
+
+
+@app.route("/card/clear", methods=["POST"])
+def card_clear():
+    for key in ["card_number", "card_password", "card_validation",
+                "card_expire", "card_installment", "card_saved"]:
+        session.pop(key, None)
+    session.modified = True
+    return redirect(url_for("card_settings"))
 
 
 @app.route("/pay", methods=["GET", "POST"])

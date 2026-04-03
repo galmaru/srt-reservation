@@ -111,9 +111,27 @@ async function poll() {
 
     if (data.status === "done") {
       document.getElementById("state-waiting").style.display = "none";
-      document.getElementById("state-done").style.display   = "block";
-      document.getElementById("res-number").textContent     = data.reservation_number;
+      document.getElementById("res-number").textContent = data.reservation_number;
       document.getElementById("pay-link").href = "/pay?res_id=" + data.reservation_number;
+
+      if (data.auto_paid) {
+        document.getElementById("state-done").innerHTML = `
+          <div style="font-size:3rem;margin-bottom:16px;">✅</div>
+          <h2 style="font-size:1.4rem;font-weight:800;color:#166534;margin-bottom:8px;">예매 &amp; 결제 완료!</h2>
+          <p style="color:#4a5568;margin-bottom:24px;">예약번호: <strong style="font-size:1.1rem;color:#1a56db;">${data.reservation_number}</strong></p>
+          <a href="/reservations" class="btn btn-primary">예매 내역 보기</a>`;
+      } else if (data.pay_error) {
+        document.getElementById("state-done").innerHTML = `
+          <div style="font-size:3rem;margin-bottom:16px;">⚠️</div>
+          <h2 style="font-size:1.4rem;font-weight:800;color:#92400e;margin-bottom:8px;">예매 완료, 결제 실패</h2>
+          <p style="color:#4a5568;margin-bottom:12px;">예약번호: <strong style="color:#1a56db;">${data.reservation_number}</strong></p>
+          <div class="alert alert-error" style="text-align:left;margin-bottom:20px;">${data.pay_error}</div>
+          <div style="display:flex;gap:12px;">
+            <a href="/pay?res_id=${data.reservation_number}" class="btn btn-success" style="flex:1;">직접 결제하기</a>
+            <a href="/reservations" class="btn btn-outline" style="flex:1;">예매 내역 보기</a>
+          </div>`;
+      }
+      document.getElementById("state-done").style.display = "block";
 
     } else if (data.status === "error") {
       document.getElementById("state-waiting").style.display = "none";
