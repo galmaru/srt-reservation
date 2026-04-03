@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="max-width: 520px; margin: 0 auto;">
+  <div class="card" id="watch-card">
+
+    <!-- 대기 상태 -->
+    <div id="state-waiting">
+      <div style="text-align: center; margin-bottom: 28px;">
+        <div style="font-size: 2.4rem; margin-bottom: 10px;">
+          <span id="spinner">⏳</span>
+        </div>
+        <h2 style="font-size: 1.3rem; font-weight: 800; color: #1a202c;">잔여석 대기 중</h2>
+        <p style="color: #718096; margin-top: 6px; font-size: 0.95rem;">
+          {{ train_name }} &nbsp;·&nbsp; {{ dep }} → {{ arr }} &nbsp;·&nbsp; {{ dep_time }} 출발
+        </p>
+      </div>
+
+      <div style="background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 10px;
+                  padding: 16px 20px; margin-bottom: 20px;">
+        <div style="font-size: 0.82rem; color: #718096; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px;">상태</div>
+        <div id="status-msg" style="font-size: 0.95rem; color: #2d3748; font-weight: 500; word-break: break-word;">
+          모니터링 시작 중...
+        </div>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 20px;">
+        <div style="flex: 1; height: 6px; background: #e2e8f0; border-radius: 3px; overflow: hidden;">
+          <div id="progress-bar" style="height: 100%; width: 0%; background: linear-gradient(90deg, #1a56db, #60a5fa);
+               border-radius: 3px; transition: width 0.4s ease; animation: pulse-bar 2s infinite;"></div>
+        </div>
+        <span id="attempt-count" style="font-size: 0.82rem; color: #a0aec0; white-space: nowrap;">0회 시도</span>
+      </div>
+
+      <form method="POST" action="/watch/{{ task_id }}/cancel">
+        <button type="submit" class="btn btn-outline" style="width: 100%;"
+                onclick="return confirm('대기를 취소하고 검색 화면으로 돌아갈까요?')">
+          대기 취소
+        </button>
+      </form>
+    </div>
+
+    <!-- 예매 완료 상태 (JS로 전환) -->
+    <div id="state-done" style="display:none; text-align: center;">
+      <div style="font-size: 3rem; margin-bottom: 16px;">🎉</div>
+      <h2 style="font-size: 1.4rem; font-weight: 800; color: #166534; margin-bottom: 8px;">예매 완료!</h2>
+      <p style="color: #4a5568; margin-bottom: 8px;">잔여석이 생겨 자동으로 예매했습니다.</p>
+      <p style="margin-bottom: 24px;">
+        예약번호: <strong id="res-number" style="font-size: 1.1rem; color: #1a56db;"></strong>
+      </p>
+      <div style="display: flex; gap: 12px;">
+        <a id="pay-link" href="#" class="btn btn-success" style="flex:1;">결제하기</a>
+        <a href="/reservations" class="btn btn-outline" style="flex:1;">예매 내역 보기</a>
+      </div>
+    </div>
+
+    <!-- 오류 상태 -->
+    <div id="state-error" style="display:none; text-align: center;">
+      <div style="font-size: 3rem; margin-bottom: 16px;">❌</div>
+      <h2 style="font-size: 1.3rem; font-weight: 800; color: #991b1b; margin-bottom: 8px;">오류 발생</h2>
+      <div id="error-msg" class="alert alert-error" style="text-align:left; margin-bottom: 20px;"></div>
+      <a href="/search" class="btn btn-primary">다시 검색하기</a>
+    </div>
+
+  </div>
+</div>
+
+<style>
+@keyframes pulse-bar {
+  0%   { opacity: 1; }
+  50%  { opacity: 0.5; }
+  100% { opacity: 1; }
+}
+@keyframes spin {
+  0%   { content: "⏳"; }
+  50%  { content: "🔄"; }
+}
+</style>
+
+<script>
+const TASK_ID = "{{ task_id }}";
+let attempt = 0;
+
+function poll() {
+  fetch("/watch/" + TASK_ID + "/status")
+    .then(r => r.json())
+    .then(data => {
+      if (data.status === "waiting") {
+        attempt = data.attempt || attempt;
+        document.getElementById("status-msg").textContent = data.message || "모니터링 중...";
+        document.getElementById("attempt-count").textContent = attempt + "회 시도";
+        // 진행바: 최대 200회 기준
+        const pct = Math.min((attempt / 200) * 100, 95);
+        document.getElementById("progress-bar").style.width = pct + "%";
+        setTimeout(poll, 1500);
+
+      } else if (data.status === "done") {
+        document.getElementById("state-waiting").style.display = "none";
+        document.getElementById("state-done").style.display = "block";
+        document.getElementById("res-number").textContent = data.reservation_number;
+        document.getElementById("pay-link").href = "/pay?res_id=" + data.reservation_number;
+
+      } else if (data.status === "cancelled") {
+        window.location.href = "/search";
+
+      } else {
+        document.getElementById("state-waiting").style.display = "none";
+        document.getElementById("state-error").style.display = "block";
+        document.getElementById("error-msg").textContent = data.message || "알 수 없는 오류";
+      }
+    })
+    .catch(() => setTimeout(poll, 3000));
+}
+
+// 스피너 애니메이션
+const spinners = ["⏳", "🔍", "⏳", "🔄"];
+let si = 0;
+setInterval(() => {
+  document.getElementById("spinner").textContent = spinners[si++ % spinners.length];
+}, 800);
+
+poll();
+</script>
+{% endblock %}

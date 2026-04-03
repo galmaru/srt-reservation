@@ -117,7 +117,16 @@
             </select>
           </div>
         </div>
-        <button type="submit" class="btn btn-primary" style="margin-top: 8px;">
+        <div class="form-group">
+          <label>잔여석 없을 때 재시도 간격</label>
+          <select name="interval">
+            <option value="2">2초</option>
+            <option value="3" selected>3초 (기본)</option>
+            <option value="5">5초</option>
+            <option value="10">10초</option>
+          </select>
+        </div>
+        <button type="submit" class="btn btn-primary" style="margin-top: 4px;">
           선택한 열차 예매하기
         </button>
       </div>
