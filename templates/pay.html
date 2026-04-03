@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="max-width: 480px; margin: 0 auto;">
+
+  {% if success %}
+  <div class="card" style="text-align: center;">
+    <div style="font-size: 3rem; margin-bottom: 16px;">✅</div>
+    <h2 style="font-size: 1.4rem; font-weight: 800; color: #166534; margin-bottom: 16px;">결제 완료!</h2>
+    <p style="color: #4a5568; margin-bottom: 24px;">예약번호 <strong>{{ reservation_id }}</strong> 결제가 완료되었습니다.</p>
+    <a href="{{ url_for('reservations') }}" class="btn btn-primary">예매 내역 보기</a>
+  </div>
+
+  {% else %}
+  <div class="card">
+    <div class="card-title">💳 카드 결제</div>
+
+    {% if error %}
+    <div class="alert alert-error">⚠ {{ error }}</div>
+    {% endif %}
+
+    <div class="alert alert-info" style="margin-bottom: 20px;">
+      카드 정보는 결제에만 사용되며 저장되지 않습니다.
+    </div>
+
+    <form method="POST" action="{{ url_for('pay') }}">
+      <input type="hidden" name="reservation_id" value="{{ reservation_id }}">
+
+      <div class="form-group">
+        <label>예약번호</label>
+        <input type="text" value="{{ reservation_id }}" readonly
+               style="background: #f1f5f9; color: #718096;">
+      </div>
+
+      <div class="form-group">
+        <label>카드번호 (16자리, 하이픈 없이)</label>
+        <input type="password" name="card_number" placeholder="1234567890123456"
+               maxlength="16" required autocomplete="cc-number">
+      </div>
+
+      <div class="grid-2">
+        <div class="form-group">
+          <label>카드 비밀번호 앞 2자리</label>
+          <input type="password" name="card_password" placeholder="••" maxlength="2" required>
+        </div>
+        <div class="form-group">
+          <label>유효기간 (YYMM)</label>
+          <input type="text" name="card_expire" placeholder="2612" maxlength="4" required
+                 autocomplete="cc-exp">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>생년월일(6자리) 또는 사업자번호(10자리)</label>
+        <input type="password" name="card_validation" placeholder="주민번호 앞 6자리" maxlength="10" required>
+      </div>
+
+      <div class="form-group">
+        <label>할부 개월 (0 = 일시불)</label>
+        <select name="installment">
+          <option value="0">일시불</option>
+          {% for m in [2,3,4,5,6,7,8,9,10,11,12,24] %}
+          <option value="{{ m }}">{{ m }}개월</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <button type="submit" class="btn btn-primary" style="margin-top: 8px;">결제하기</button>
+    </form>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

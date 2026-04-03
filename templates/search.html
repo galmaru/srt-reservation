@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="card">
+  <div class="card-title">🔍 열차 검색</div>
+
+  {% if error %}
+  <div class="alert alert-error">⚠ {{ error }}</div>
+  {% endif %}
+
+  <form method="POST" action="{{ url_for('search_post') }}">
+    <div class="grid-2">
+      <div class="form-group">
+        <label>출발역</label>
+        <select name="dep" required>
+          {% for s in stations %}
+          <option value="{{ s }}" {% if s == dep %}selected{% endif %}>{{ s }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>도착역</label>
+        <select name="arr" required>
+          {% for s in stations %}
+          <option value="{{ s }}" {% if s == arr %}selected{% endif %}>{{ s }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    <div class="grid-2">
+      <div class="form-group">
+        <label>날짜</label>
+        <input type="date" name="date"
+               value="{{ (date[:4]+'-'+date[4:6]+'-'+date[6:]) if date else '' }}"
+               min="{{ '' }}" required>
+      </div>
+      <div class="form-group">
+        <label>출발 시각 이후</label>
+        <input type="time" name="time" value="{{ (time[:2]+':'+time[2:4]) if time else '08:00' }}" required>
+      </div>
+    </div>
+    <button type="submit" class="btn btn-primary">검색</button>
+  </form>
+</div>
+
+{% if trains is defined %}
+  {% if trains %}
+  <div class="card">
+    <div class="card-title">🚄 검색 결과 ({{ trains|length }}개)</div>
+
+    <form method="POST" action="{{ url_for('reserve') }}">
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        {% for t in trains %}
+        <label style="cursor: pointer;">
+          <input type="radio" name="train_idx" value="{{ loop.index0 }}"
+                 {% if loop.first %}checked{% endif %}
+                 style="width:auto; margin-right: 8px;">
+          <div style="display:inline-block; vertical-align:top; width: calc(100% - 28px);">
+            <div style="background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 12px;
+                        padding: 16px 20px; transition: border-color 0.15s;"
+                 onmouseover="this.style.borderColor='#1a56db'"
+                 onmouseout="this.style.borderColor='#e2e8f0'">
+              <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+                <div>
+                  <span style="font-size: 1.1rem; font-weight: 700; color: #1a56db;">{{ t.train_name }}</span>
+                  <span style="color: #718096; font-size: 0.85rem; margin-left: 8px;">{{ t.running_time }}</span>
+                </div>
+                <div style="display: flex; gap: 6px;">
+                  {% if t.general_seat_available %}
+                    <span class="badge badge-green">일반실 예매가능</span>
+                  {% else %}
+                    <span class="badge badge-red">일반실 매진</span>
+                  {% endif %}
+                  {% if t.special_seat_available %}
+                    <span class="badge badge-blue">특실 예매가능</span>
+                  {% else %}
+                    <span class="badge badge-red">특실 매진</span>
+                  {% endif %}
+                </div>
+              </div>
+              <div style="display: flex; align-items: center; gap: 12px; margin-top: 10px;">
+                <div style="text-align: center;">
+                  <div style="font-size: 1.5rem; font-weight: 800;">{{ t.dep_time[:2] }}:{{ t.dep_time[2:4] }}</div>
+                  <div style="font-size: 0.82rem; color: #718096;">{{ t.dep_station_name }}</div>
+                </div>
+                <div style="flex:1; text-align:center; color: #a0aec0; font-size: 1.2rem;">→</div>
+                <div style="text-align: center;">
+                  <div style="font-size: 1.5rem; font-weight: 800;">{{ t.arr_time[:2] }}:{{ t.arr_time[2:4] }}</div>
+                  <div style="font-size: 0.82rem; color: #718096;">{{ t.arr_station_name }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </label>
+        {% endfor %}
+      </div>
+
+      <div style="margin-top: 24px; border-top: 1.5px solid #e2e8f0; padding-top: 20px;">
+        <div class="grid-2">
+          <div class="form-group">
+            <label>좌석 종류</label>
+            <select name="seat_type">
+              <option value="GENERAL_FIRST">일반실 우선</option>
+              <option value="GENERAL_ONLY">일반실만</option>
+              <option value="SPECIAL_FIRST">특실 우선</option>
+              <option value="SPECIAL_ONLY">특실만</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>어른 인원수</label>
+            <select name="adult_count">
+              {% for i in range(1, 10) %}
+              <option value="{{ i }}" {% if i == 1 %}selected{% endif %}>{{ i }}명</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary" style="margin-top: 8px;">
+          선택한 열차 예매하기
+        </button>
+      </div>
+    </form>
+  </div>
+  {% else %}
+  <div class="card">
+    <div class="alert alert-info">검색 결과가 없습니다. 날짜나 시간을 변경해 보세요.</div>
+  </div>
+  {% endif %}
+{% endif %}
+
+{% endblock %}
