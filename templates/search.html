@@ -53,16 +53,15 @@
       <div style="display: flex; flex-direction: column; gap: 12px;">
         {% for t in trains %}
         {% set soldout = not t.general_seat_available() and not t.special_seat_available() %}
-        <label style="cursor: {% if soldout %}default{% else %}pointer{% endif %}; opacity: {% if soldout %}0.55{% else %}1{% endif %};">
+        <label style="cursor: pointer;">
           <input type="radio" name="train_idx" value="{{ loop.index0 }}"
-                 {% if loop.first and not soldout %}checked{% endif %}
-                 {% if soldout %}disabled{% endif %}
+                 {% if loop.first %}checked{% endif %}
                  style="width:auto; margin-right: 8px;">
           <div style="display:inline-block; vertical-align:top; width: calc(100% - 28px);">
             <div style="background: {% if soldout %}#f1f5f9{% else %}#f8fafc{% endif %}; border: 1.5px solid #e2e8f0; border-radius: 12px;
                         padding: 16px 20px; transition: border-color 0.15s;"
-                 {% if not soldout %}onmouseover="this.style.borderColor='#1a56db'"
-                 onmouseout="this.style.borderColor='#e2e8f0'"{% endif %}>
+                 onmouseover="this.style.borderColor='#1a56db'"
+                 onmouseout="this.style.borderColor='#e2e8f0'">
               <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
                 <div>
                   <span style="font-size: 1.1rem; font-weight: 700; color: #1a56db;">{{ t.train_name }}</span>
