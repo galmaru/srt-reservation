@@ -131,6 +131,7 @@ def reserve():
     seat_type = request.form.get("seat_type", "GENERAL_FIRST")
     adult_count = int(request.form.get("adult_count", 1))
     interval = int(request.form.get("interval", 3))
+    mode = request.form.get("mode", "reserve")  # "reserve" | "notify"
 
     srt = get_srt()
     if not srt:
@@ -142,8 +143,8 @@ def reserve():
     except Exception as e:
         return render_template("reserve_result.html", error=str(e), success=False)
 
-    # 잔여석 있으면 즉시 예매
-    if train.seat_available():
+    # 잔여석 있고 자동예매 모드 → 즉시 예매
+    if train.seat_available() and mode == "reserve":
         try:
             reservation = srt_bot.make_reservation(srt, train, adult_count, seat_type)
             session["reservation_id"] = str(reservation.reservation_number)
@@ -156,18 +157,31 @@ def reserve():
         except Exception as e:
             return render_template("reserve_result.html", error=str(e), success=False)
 
-    # 잔여석 없음 → 클라이언트 사이드 폴링 대기 화면
+    # 알림 모드에서 잔여석 이미 있는 경우 → 바로 알림 화면으로
+    if train.seat_available() and mode == "notify":
+        return render_template(
+            "watch.html",
+            dep=dep, arr=arr,
+            dep_time=train.dep_time[:2] + ":" + train.dep_time[2:4],
+            train_name=train.train_name,
+            train_dep_time_raw=train.dep_time,
+            date=date, time_str=time_str,
+            seat_type=seat_type, adult_count=adult_count,
+            interval=interval, mode="notify",
+            already_available=True,
+        )
+
+    # 잔여석 없음 → 폴링 대기 화면
     return render_template(
         "watch.html",
         dep=dep, arr=arr,
         dep_time=train.dep_time[:2] + ":" + train.dep_time[2:4],
         train_name=train.train_name,
         train_dep_time_raw=train.dep_time,
-        date=date,
-        time_str=time_str,
-        seat_type=seat_type,
-        adult_count=adult_count,
-        interval=interval,
+        date=date, time_str=time_str,
+        seat_type=seat_type, adult_count=adult_count,
+        interval=interval, mode=mode,
+        already_available=False,
     )
 
 
@@ -188,6 +202,7 @@ def watch_poll():
     train_dep_time = data.get("train_dep_time")   # HHMMSS
     seat_type = data.get("seat_type", "GENERAL_FIRST")
     adult_count = int(data.get("adult_count", 1))
+    mode = data.get("mode", "reserve")  # "reserve" | "notify"
 
     srt = get_srt()
     if not srt:
@@ -201,6 +216,14 @@ def watch_poll():
             return jsonify({"status": "waiting", "message": "해당 열차를 찾을 수 없습니다."})
 
         if target.seat_available():
+            # 알림 모드: 예매 없이 "좌석 생김" 반환
+            if mode == "notify":
+                general = "일반실 가능" if target.general_seat_available else ""
+                special = "특실 가능" if target.special_seat_available else ""
+                seat_info = " / ".join(filter(None, [general, special]))
+                return jsonify({"status": "available", "seat_info": seat_info})
+
+            # 자동 예매 모드
             reservation = srt_bot.make_reservation(srt, target, adult_count, seat_type)
             session["reservation_id"] = str(reservation.reservation_number)
             pay_result = auto_pay_if_saved(srt, reservation)

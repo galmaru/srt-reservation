@@ -3,54 +3,77 @@
 <div style="max-width: 520px; margin: 0 auto;">
   <div class="card">
 
-    <!-- 대기 상태 -->
-    <div id="state-waiting">
+    <!-- 대기 중 -->
+    <div id="state-waiting" {% if already_available %}style="display:none"{% endif %}>
       <div style="text-align: center; margin-bottom: 28px;">
-        <div style="font-size: 2.4rem; margin-bottom: 10px;"><span id="spinner">⏳</span></div>
-        <h2 style="font-size: 1.3rem; font-weight: 800; color: #1a202c;">잔여석 대기 중</h2>
+        <div style="font-size: 2.4rem; margin-bottom: 10px;"><span id="spinner">{% if mode == 'notify' %}🔔{% else %}⏳{% endif %}</span></div>
+        <h2 style="font-size: 1.3rem; font-weight: 800; color: #1a202c;">
+          {% if mode == 'notify' %}빈좌석 알림 대기 중{% else %}잔여석 대기 중 (자동 예매){% endif %}
+        </h2>
         <p style="color: #718096; margin-top: 6px; font-size: 0.95rem;">
           {{ train_name }} &nbsp;·&nbsp; {{ dep }} → {{ arr }} &nbsp;·&nbsp; {{ dep_time }} 출발
         </p>
       </div>
 
-      <div style="background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 10px;
-                  padding: 16px 20px; margin-bottom: 20px;">
-        <div style="font-size: 0.82rem; color: #718096; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px;">상태</div>
-        <div id="status-msg" style="font-size: 0.95rem; color: #2d3748; font-weight: 500; word-break: break-word;">
+      <div style="background:#f8fafc; border:1.5px solid #e2e8f0; border-radius:10px; padding:16px 20px; margin-bottom:20px;">
+        <div style="font-size:0.82rem; color:#718096; margin-bottom:4px; text-transform:uppercase; letter-spacing:0.5px;">상태</div>
+        <div id="status-msg" style="font-size:0.95rem; color:#2d3748; font-weight:500; word-break:break-word;">
           모니터링 시작 중...
         </div>
       </div>
 
-      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 20px;">
-        <div style="flex: 1; height: 6px; background: #e2e8f0; border-radius: 3px; overflow: hidden;">
-          <div id="progress-bar" style="height:100%; width:0%; background: linear-gradient(90deg,#1a56db,#60a5fa);
-               border-radius:3px; animation: pulse-bar 2s infinite;"></div>
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:20px;">
+        <div style="flex:1; height:6px; background:#e2e8f0; border-radius:3px; overflow:hidden;">
+          <div id="progress-bar" style="height:100%; width:0%; background:linear-gradient(90deg,{% if mode=='notify' %}#f59e0b,#fcd34d{% else %}#1a56db,#60a5fa{% endif %});
+               border-radius:3px; animation:pulse-bar 2s infinite;"></div>
         </div>
-        <span id="attempt-count" style="font-size: 0.82rem; color: #a0aec0; white-space: nowrap;">0회 시도</span>
+        <span id="attempt-count" style="font-size:0.82rem; color:#a0aec0; white-space:nowrap;">0회 시도</span>
       </div>
 
-      <button id="btn-cancel" class="btn btn-outline" style="width: 100%;">대기 취소</button>
+      <button id="btn-cancel" class="btn btn-outline" style="width:100%;">대기 취소</button>
     </div>
 
-    <!-- 예매 완료 -->
-    <div id="state-done" style="display:none; text-align:center;">
-      <div style="font-size: 3rem; margin-bottom: 16px;">🎉</div>
-      <h2 style="font-size: 1.4rem; font-weight: 800; color: #166534; margin-bottom: 8px;">예매 완료!</h2>
-      <p style="color: #4a5568; margin-bottom: 8px;">잔여석이 생겨 자동으로 예매했습니다.</p>
-      <p style="margin-bottom: 24px;">
-        예약번호: <strong id="res-number" style="font-size: 1.1rem; color: #1a56db;"></strong>
+    <!-- 알림 모드: 좌석 생김 -->
+    <div id="state-available" {% if not already_available %}style="display:none"{% endif %}>
+      <div style="text-align:center; margin-bottom:24px;">
+        <div style="font-size:3rem; margin-bottom:12px;">🔔</div>
+        <h2 style="font-size:1.4rem; font-weight:800; color:#b45309; margin-bottom:8px;">빈좌석이 생겼습니다!</h2>
+        <p style="color:#718096; font-size:0.95rem;">{{ train_name }} · {{ dep }} → {{ arr }} · {{ dep_time }} 출발</p>
+      </div>
+      <div id="seat-info-box" style="background:#fffbeb; border:1.5px solid #fcd34d; border-radius:10px;
+            padding:14px 18px; margin-bottom:20px; font-size:0.95rem; font-weight:600; color:#b45309; text-align:center;">
+        {% if already_available %}좌석 있음{% endif %}
+      </div>
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <a id="btn-go-reserve"
+           href="/search"
+           class="btn btn-primary" style="flex:1;">지금 예매하기</a>
+        <button id="btn-keep-watching" class="btn btn-outline" style="flex:1;"
+                onclick="startPolling()">계속 모니터링</button>
+      </div>
+      <p style="text-align:center; font-size:0.8rem; color:#a0aec0; margin-top:10px;">
+        빠르게 예매하지 않으면 다시 매진될 수 있습니다
       </p>
-      <div style="display: flex; gap: 12px;">
+    </div>
+
+    <!-- 자동예매 완료 -->
+    <div id="state-done" style="display:none; text-align:center;">
+      <div style="font-size:3rem; margin-bottom:16px;">🎉</div>
+      <h2 style="font-size:1.4rem; font-weight:800; color:#166534; margin-bottom:8px;">예매 완료!</h2>
+      <p style="color:#4a5568; margin-bottom:24px;">
+        예약번호: <strong id="res-number" style="font-size:1.1rem; color:#1a56db;"></strong>
+      </p>
+      <div style="display:flex; gap:12px;">
         <a id="pay-link" href="#" class="btn btn-success" style="flex:1;">결제하기</a>
-        <a href="/reservations" class="btn btn-outline" style="flex:1;">예매 내역 보기</a>
+        <a href="/reservations" class="btn btn-outline" style="flex:1;">예매 내역</a>
       </div>
     </div>
 
     <!-- 오류 -->
     <div id="state-error" style="display:none; text-align:center;">
-      <div style="font-size: 3rem; margin-bottom: 16px;">❌</div>
-      <h2 style="font-size: 1.3rem; font-weight: 800; color: #991b1b; margin-bottom: 8px;">오류 발생</h2>
-      <div id="error-msg" class="alert alert-error" style="text-align:left; margin-bottom: 20px;"></div>
+      <div style="font-size:3rem; margin-bottom:16px;">❌</div>
+      <h2 style="font-size:1.3rem; font-weight:800; color:#991b1b; margin-bottom:8px;">오류 발생</h2>
+      <div id="error-msg" class="alert alert-error" style="text-align:left; margin-bottom:20px;"></div>
       <a href="/search" class="btn btn-primary">다시 검색하기</a>
     </div>
 
@@ -70,26 +93,73 @@ const PAYLOAD = {
   train_dep_time: "{{ train_dep_time_raw }}",
   seat_type:      "{{ seat_type }}",
   adult_count:    {{ adult_count }},
+  mode:           "{{ mode }}",
 };
-const INTERVAL_SEC = {{ interval }};
+const INTERVAL_SEC    = {{ interval }};
+const MODE            = "{{ mode }}";
+// 검색 화면으로 돌아갈 때 이 열차를 선택해서 예매할 수 있도록 파라미터 전달
+const RESERVE_URL     = "/search";  // 단순히 검색 화면으로 (세션에 search_params 유지됨)
 
 let attempt   = 0;
 let stopped   = false;
 let timerId   = null;
-let isPolling = false;  // 동시 폴 실행 방지
+let isPolling = false;
 
-const spinners = ["⏳","🔍","⏳","🔄"];
+// 이미 좌석 있는 경우 (알림 모드) 즉시 알림 상태 표시
+{% if already_available %}
+stopped = true;
+{% endif %}
+
+const spinners = MODE === 'notify'
+  ? ["🔔","🔍","🔔","👀"]
+  : ["⏳","🔍","⏳","🔄"];
 let si = 0;
-setInterval(() => {
-  document.getElementById("spinner").textContent = spinners[si++ % spinners.length];
-}, 800);
+const spinnerEl = document.getElementById("spinner");
+if (spinnerEl) {
+  setInterval(() => { spinnerEl.textContent = spinners[si++ % spinners.length]; }, 900);
+}
 
 document.getElementById("btn-cancel").addEventListener("click", () => {
-  if (!confirm("대기를 취소하고 검색 화면으로 돌아갈까요?")) return;
+  if (!confirm("대기를 취소하시겠습니까?")) return;
   stopped = true;
   clearTimeout(timerId);
   window.location.href = "/search";
 });
+
+function showAvailable(seatInfo) {
+  stopped = true;
+  clearTimeout(timerId);
+  document.getElementById("state-waiting").style.display   = "none";
+  document.getElementById("state-available").style.display = "block";
+  if (seatInfo) {
+    document.getElementById("seat-info-box").textContent = seatInfo;
+  }
+}
+
+function showDone(data) {
+  document.getElementById("state-waiting").style.display = "none";
+  document.getElementById("res-number").textContent = data.reservation_number;
+  document.getElementById("pay-link").href = "/pay?res_id=" + data.reservation_number;
+
+  if (data.auto_paid) {
+    document.getElementById("state-done").innerHTML = `
+      <div style="font-size:3rem;margin-bottom:16px;">✅</div>
+      <h2 style="font-size:1.4rem;font-weight:800;color:#166534;margin-bottom:8px;">예매 &amp; 결제 완료!</h2>
+      <p style="color:#4a5568;margin-bottom:24px;">예약번호: <strong style="font-size:1.1rem;color:#1a56db;">${data.reservation_number}</strong></p>
+      <a href="/reservations" class="btn btn-primary">예매 내역 보기</a>`;
+  } else if (data.pay_error) {
+    document.getElementById("state-done").innerHTML = `
+      <div style="font-size:3rem;margin-bottom:16px;">⚠️</div>
+      <h2 style="font-size:1.4rem;font-weight:800;color:#92400e;margin-bottom:8px;">예매 완료, 결제 실패</h2>
+      <p style="color:#4a5568;margin-bottom:12px;">예약번호: <strong style="color:#1a56db;">${data.reservation_number}</strong></p>
+      <div class="alert alert-error" style="text-align:left;margin-bottom:20px;">${data.pay_error}</div>
+      <div style="display:flex;gap:12px;">
+        <a href="/pay?res_id=${data.reservation_number}" class="btn btn-success" style="flex:1;">직접 결제하기</a>
+        <a href="/reservations" class="btn btn-outline" style="flex:1;">예매 내역 보기</a>
+      </div>`;
+  }
+  document.getElementById("state-done").style.display = "block";
+}
 
 function updateProgress() {
   const pct = Math.min((attempt / 200) * 100, 95);
@@ -111,29 +181,13 @@ async function poll() {
     });
     const data = await resp.json();
 
-    if (data.status === "done") {
-      document.getElementById("state-waiting").style.display = "none";
-      document.getElementById("res-number").textContent = data.reservation_number;
-      document.getElementById("pay-link").href = "/pay?res_id=" + data.reservation_number;
+    if (data.status === "available") {
+      // 알림 모드: 좌석 생김
+      showAvailable(data.seat_info);
 
-      if (data.auto_paid) {
-        document.getElementById("state-done").innerHTML = `
-          <div style="font-size:3rem;margin-bottom:16px;">✅</div>
-          <h2 style="font-size:1.4rem;font-weight:800;color:#166534;margin-bottom:8px;">예매 &amp; 결제 완료!</h2>
-          <p style="color:#4a5568;margin-bottom:24px;">예약번호: <strong style="font-size:1.1rem;color:#1a56db;">${data.reservation_number}</strong></p>
-          <a href="/reservations" class="btn btn-primary">예매 내역 보기</a>`;
-      } else if (data.pay_error) {
-        document.getElementById("state-done").innerHTML = `
-          <div style="font-size:3rem;margin-bottom:16px;">⚠️</div>
-          <h2 style="font-size:1.4rem;font-weight:800;color:#92400e;margin-bottom:8px;">예매 완료, 결제 실패</h2>
-          <p style="color:#4a5568;margin-bottom:12px;">예약번호: <strong style="color:#1a56db;">${data.reservation_number}</strong></p>
-          <div class="alert alert-error" style="text-align:left;margin-bottom:20px;">${data.pay_error}</div>
-          <div style="display:flex;gap:12px;">
-            <a href="/pay?res_id=${data.reservation_number}" class="btn btn-success" style="flex:1;">직접 결제하기</a>
-            <a href="/reservations" class="btn btn-outline" style="flex:1;">예매 내역 보기</a>
-          </div>`;
-      }
-      document.getElementById("state-done").style.display = "block";
+    } else if (data.status === "done") {
+      // 자동예매 완료
+      showDone(data);
 
     } else if (data.status === "error") {
       document.getElementById("state-waiting").style.display = "none";
@@ -141,7 +195,6 @@ async function poll() {
       document.getElementById("error-msg").textContent       = data.message;
 
     } else {
-      // waiting
       document.getElementById("status-msg").textContent =
         "[" + attempt + "회 시도] " + (data.message || "잔여석 없음 — 재시도 중...");
       isPolling = false;
@@ -155,7 +208,17 @@ async function poll() {
   }
 }
 
+function startPolling() {
+  document.getElementById("state-available").style.display = "none";
+  document.getElementById("state-waiting").style.display   = "block";
+  stopped   = false;
+  isPolling = false;
+  timerId   = setTimeout(poll, 500);
+}
+
 // 시작
+{% if not already_available %}
 timerId = setTimeout(poll, 500);
+{% endif %}
 </script>
 {% endblock %}
