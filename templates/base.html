@@ -166,6 +166,7 @@
     <nav>
       {% if session.get('srt_id') %}
         <a href="{{ url_for('search') }}">열차 검색</a>
+        <a href="{{ url_for('monitors') }}">모니터</a>
         <a href="{{ url_for('reservations') }}">예매 내역</a>
         <a href="{{ url_for('card_settings') }}" style="position:relative;">
           카드 설정
@@ -179,6 +180,18 @@
     </nav>
   </header>
   <main>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+      <div style="max-width:860px; margin:16px auto 0; padding:0 20px;">
+        {% for category, msg in messages %}
+        <div class="alert alert-{{ 'success' if category == 'success' else 'error' }}"
+             style="margin-bottom:8px;">
+          {{ '✅' if category == 'success' else '⚠' }} {{ msg }}
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    {% endwith %}
     {% block content %}{% endblock %}
   </main>
 </body>

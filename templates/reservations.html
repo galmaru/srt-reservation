@@ -4,13 +4,25 @@
 <div class="card">
   <div class="card-title">📋 예매 내역</div>
 
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, msg in messages %}
+      <div class="alert alert-{{ 'success' if category == 'success' else 'error' }}">
+        {{ '✅' if category == 'success' else '⚠' }} {{ msg }}
+      </div>
+    {% endfor %}
+  {% endwith %}
+
+  {% if error %}
+  <div class="alert alert-error">⚠ 예매 내역 조회 실패: {{ error }}</div>
+  {% endif %}
+
   {% if reservations %}
   <div style="display: flex; flex-direction: column; gap: 12px;">
     {% for r in reservations %}
     <div style="background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 12px; padding: 18px 20px;">
       <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
         <div>
-          <div style="font-weight: 700; font-size: 1rem; margin-bottom: 6px;">
+          <div style="font-weight: 700; font-size: 1rem; margin-bottom: 4px;">
             {{ r.dep_station_name }} → {{ r.arr_station_name }}
           </div>
           <div style="color: #718096; font-size: 0.88rem;">
@@ -22,8 +34,8 @@
             <span class="badge badge-green">결제완료</span>
           {% else %}
             <span class="badge badge-yellow">미결제</span>
-            <a href="{{ url_for('pay') }}" class="btn btn-success"
-               style="padding: 6px 14px; font-size: 0.85rem;">결제하기</a>
+            <a href="{{ url_for('pay') }}?res_id={{ r.reservation_number }}"
+               class="btn btn-success" style="padding: 6px 14px; font-size: 0.85rem;">결제하기</a>
           {% endif %}
           <form method="POST" action="{{ url_for('cancel', res_number=r.reservation_number) }}"
                 onsubmit="return confirm('정말 취소하시겠습니까?')">
@@ -38,8 +50,9 @@
   <div class="alert alert-info">예매 내역이 없습니다.</div>
   {% endif %}
 
-  <div style="margin-top: 20px;">
+  <div style="margin-top: 20px; display: flex; gap: 10px; flex-wrap: wrap;">
     <a href="{{ url_for('search') }}" class="btn btn-outline">새 열차 검색</a>
+    <a href="{{ url_for('monitors') }}" class="btn btn-outline">모니터 목록</a>
   </div>
 </div>
 

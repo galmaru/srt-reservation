@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="card">
+  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:20px;
+              padding-bottom:16px; border-bottom:2px solid #e2e8f0; flex-wrap:wrap; gap:12px;">
+    <div class="card-title" style="margin:0; padding:0; border:none;">📡 모니터 목록</div>
+    <a href="{{ url_for('search') }}" class="btn btn-outline" style="font-size:0.9rem; padding:8px 16px;">
+      + 새 모니터 등록
+    </a>
+  </div>
+
+  {% if monitors %}
+  <div id="monitor-list" style="display:flex; flex-direction:column; gap:14px;">
+    {% for m in monitors %}
+    <div class="monitor-card" id="card-{{ m.id }}"
+         style="border:1.5px solid #e2e8f0; border-radius:12px; padding:18px 20px;
+                background:#fafafa; transition:border-color 0.2s;">
+
+      <!-- 헤더 -->
+      <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+        <div>
+          <div style="font-weight:700; font-size:1rem; margin-bottom:4px;">
+            {{ m.train_name }} &nbsp;·&nbsp; {{ m.dep }} → {{ m.arr }}
+            &nbsp;·&nbsp; {{ m.dep_time_display }} 출발
+          </div>
+          <div style="font-size:0.82rem; color:#a0aec0;">
+            {{ '🔔 알림 모드' if m.mode == 'notify' else '⚡ 자동 예매 모드' }}
+            &nbsp;·&nbsp; 등록: {{ m.created_at }}
+            &nbsp;·&nbsp; 날짜: {{ m.date[:4] }}-{{ m.date[4:6] }}-{{ m.date[6:] }}
+          </div>
+        </div>
+        <div id="badge-{{ m.id }}">
+          {{ _render_badge(m.status) }}
+        </div>
+      </div>
+
+      <!-- 상태 메시지 -->
+      <div id="msg-{{ m.id }}"
+           style="margin-top:12px; padding:10px 14px; background:#f1f5f9;
+                  border-radius:8px; font-size:0.88rem; color:#4a5568; word-break:break-word;">
+        {{ m.message }}
+      </div>
+
+      <!-- 액션 버튼 -->
+      <div id="actions-{{ m.id }}" style="margin-top:12px; display:flex; gap:8px; flex-wrap:wrap;">
+        {% if m.status == 'running' %}
+          <button class="btn btn-danger" style="font-size:0.85rem; padding:6px 14px;"
+                  onclick="cancelMonitor('{{ m.id }}')">모니터 중지</button>
+        {% elif m.status == 'available' %}
+          <a href="{{ url_for('search') }}" class="btn btn-primary" style="font-size:0.85rem; padding:6px 14px;">
+            지금 예매하기
+          </a>
+          <button class="btn btn-outline" style="font-size:0.85rem; padding:6px 14px;"
+                  onclick="deleteMonitor('{{ m.id }}')">삭제</button>
+        {% elif m.status == 'done' %}
+          {% if not m.auto_paid %}
+            <a href="/pay?res_id={{ m.reservation_number }}"
+               class="btn btn-success" style="font-size:0.85rem; padding:6px 14px;">결제하기</a>
+          {% endif %}
+          <button class="btn btn-outline" style="font-size:0.85rem; padding:6px 14px;"
+                  onclick="deleteMonitor('{{ m.id }}')">삭제</button>
+        {% else %}
+          <button class="btn btn-outline" style="font-size:0.85rem; padding:6px 14px;"
+                  onclick="deleteMonitor('{{ m.id }}')">삭제</button>
+        {% endif %}
+      </div>
+
+    </div>
+    {% endfor %}
+  </div>
+
+  {% else %}
+  <div class="alert alert-info">
+    등록된 모니터가 없습니다.<br>
+    <a href="{{ url_for('search') }}" style="color:#1a56db;">열차를 검색</a>해서 알림 또는 자동 예매를 등록하세요.
+  </div>
+  {% endif %}
+
+</div>
+
+<script>
+const BADGE = {
+  running:   '<span class="badge badge-blue" style="font-size:0.82rem;">모니터링 중</span>',
+  available: '<span class="badge badge-yellow" style="font-size:0.82rem;">🔔 빈좌석 발생!</span>',
+  done:      '<span class="badge badge-green" style="font-size:0.82rem;">✅ 예매 완료</span>',
+  cancelled: '<span class="badge" style="background:#f1f5f9;color:#718096;font-size:0.82rem;">중지됨</span>',
+  error:     '<span class="badge badge-red" style="font-size:0.82rem;">오류</span>',
+};
+
+const RUNNING_IDS = [
+  {% for m in monitors %}{% if m.status == 'running' %}"{{ m.id }}",{% endif %}{% endfor %}
+];
+
+function updateCard(id, data) {
+  const badge   = document.getElementById('badge-' + id);
+  const msg     = document.getElementById('msg-' + id);
+  const actions = document.getElementById('actions-' + id);
+  const card    = document.getElementById('card-' + id);
+
+  if (badge) badge.innerHTML = BADGE[data.status] || '';
+  if (msg)   msg.textContent = data.message || '';
+
+  // 카드 테두리 강조
+  if (card) {
+    card.style.borderColor =
+      data.status === 'available' ? '#f59e0b' :
+      data.status === 'done'      ? '#16a34a' :
+      data.status === 'error'     ? '#dc2626' : '#e2e8f0';
+  }
+
+  // 버튼 갱신
+  if (actions) {
+    if (data.status === 'available') {
+      actions.innerHTML = `
+        <a href="/search" class="btn btn-primary" style="font-size:0.85rem;padding:6px 14px;">지금 예매하기</a>
+        <button class="btn btn-outline" style="font-size:0.85rem;padding:6px 14px;"
+                onclick="deleteMonitor('${id}')">삭제</button>`;
+    } else if (data.status === 'done') {
+      const payBtn = !data.auto_paid
+        ? `<a href="/pay?res_id=${data.reservation_number}" class="btn btn-success" style="font-size:0.85rem;padding:6px 14px;">결제하기</a>`
+        : '';
+      actions.innerHTML = payBtn +
+        `<button class="btn btn-outline" style="font-size:0.85rem;padding:6px 14px;"
+                 onclick="deleteMonitor('${id}')">삭제</button>`;
+    } else if (data.status !== 'running') {
+      actions.innerHTML =
+        `<button class="btn btn-outline" style="font-size:0.85rem;padding:6px 14px;"
+                 onclick="deleteMonitor('${id}')">삭제</button>`;
+    }
+  }
+}
+
+function pollMonitor(id) {
+  fetch('/api/monitor/' + id + '/status')
+    .then(r => r.json())
+    .then(data => {
+      updateCard(id, data);
+      if (data.status === 'running') {
+        setTimeout(() => pollMonitor(id), 2000);
+      }
+    })
+    .catch(() => setTimeout(() => pollMonitor(id), 5000));
+}
+
+function cancelMonitor(id) {
+  if (!confirm('모니터를 중지하시겠습니까?')) return;
+  fetch('/api/monitor/' + id + '/cancel', {method:'POST'})
+    .then(() => pollMonitor(id));
+}
+
+function deleteMonitor(id) {
+  fetch('/api/monitor/' + id + '/delete', {method:'POST'})
+    .then(() => {
+      const card = document.getElementById('card-' + id);
+      if (card) card.remove();
+    });
+}
+
+// 실행 중인 모니터 폴링 시작
+RUNNING_IDS.forEach(id => pollMonitor(id));
+
+// 30초마다 페이지 자동 새로고침 (완료된 모니터 반영)
+setTimeout(() => location.reload(), 30000);
+</script>
+
+{% macro _render_badge(status) %}
+  {% if status == 'running' %}
+    <span class="badge badge-blue" style="font-size:0.82rem;">모니터링 중</span>
+  {% elif status == 'available' %}
+    <span class="badge badge-yellow" style="font-size:0.82rem;">🔔 빈좌석 발생!</span>
+  {% elif status == 'done' %}
+    <span class="badge badge-green" style="font-size:0.82rem;">✅ 예매 완료</span>
+  {% elif status == 'cancelled' %}
+    <span class="badge" style="background:#f1f5f9;color:#718096;font-size:0.82rem;">중지됨</span>
+  {% else %}
+    <span class="badge badge-red" style="font-size:0.82rem;">오류</span>
+  {% endif %}
+{% endmacro %}
+
+{% endblock %}
