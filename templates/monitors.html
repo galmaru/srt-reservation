@@ -31,7 +31,17 @@
           </div>
         </div>
         <div id="badge-{{ m.id }}">
-          {{ _render_badge(m.status) }}
+          {% if m.status == 'running' %}
+            <span class="badge badge-blue" style="font-size:0.82rem;">모니터링 중</span>
+          {% elif m.status == 'available' %}
+            <span class="badge badge-yellow" style="font-size:0.82rem;">🔔 빈좌석 발생!</span>
+          {% elif m.status == 'done' %}
+            <span class="badge badge-green" style="font-size:0.82rem;">✅ 예매 완료</span>
+          {% elif m.status == 'cancelled' %}
+            <span class="badge" style="background:#f1f5f9;color:#718096;font-size:0.82rem;">중지됨</span>
+          {% else %}
+            <span class="badge badge-red" style="font-size:0.82rem;">오류</span>
+          {% endif %}
         </div>
       </div>
 
@@ -163,19 +173,5 @@ RUNNING_IDS.forEach(id => pollMonitor(id));
 // 30초마다 페이지 자동 새로고침 (완료된 모니터 반영)
 setTimeout(() => location.reload(), 30000);
 </script>
-
-{% macro _render_badge(status) %}
-  {% if status == 'running' %}
-    <span class="badge badge-blue" style="font-size:0.82rem;">모니터링 중</span>
-  {% elif status == 'available' %}
-    <span class="badge badge-yellow" style="font-size:0.82rem;">🔔 빈좌석 발생!</span>
-  {% elif status == 'done' %}
-    <span class="badge badge-green" style="font-size:0.82rem;">✅ 예매 완료</span>
-  {% elif status == 'cancelled' %}
-    <span class="badge" style="background:#f1f5f9;color:#718096;font-size:0.82rem;">중지됨</span>
-  {% else %}
-    <span class="badge badge-red" style="font-size:0.82rem;">오류</span>
-  {% endif %}
-{% endmacro %}
 
 {% endblock %}
