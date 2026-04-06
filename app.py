@@ -95,8 +95,8 @@ def _run_monitor(monitor_id: str, srt_id: str, srt_pw: str,
                                 message="해당 열차를 찾을 수 없습니다. 재시도 중...")
             elif target.seat_available():
                 if mode == "notify":
-                    g = "일반실 가능" if target.general_seat_available else ""
-                    s = "특실 가능"  if target.special_seat_available  else ""
+                    g = "일반실 가능" if target.general_seat_available() else ""
+                    s = "특실 가능"  if target.special_seat_available()  else ""
                     seat_info = " / ".join(filter(None, [g, s]))
                     _update_monitor(monitor_id, status="available",
                                     seat_info=seat_info,
@@ -127,8 +127,8 @@ def _run_monitor(monitor_id: str, srt_id: str, srt_pw: str,
                                     message="예매 완료" + (" + 결제 완료" if auto_paid else ""))
                     return
             else:
-                g = "일반실 매진" if not target.general_seat_available else "일반실 가능"
-                s = "특실 매진"  if not target.special_seat_available  else "특실 가능"
+                g = "일반실 매진" if not target.general_seat_available() else "일반실 가능"
+                s = "특실 매진"  if not target.special_seat_available()  else "특실 가능"
                 _update_monitor(monitor_id, attempt=attempt,
                                 message=f"[{attempt}회] 잔여석 없음 ({g} / {s})")
 
