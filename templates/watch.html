@@ -73,9 +73,10 @@ const PAYLOAD = {
 };
 const INTERVAL_SEC = {{ interval }};
 
-let attempt  = 0;
-let stopped  = false;
-let timerId  = null;
+let attempt   = 0;
+let stopped   = false;
+let timerId   = null;
+let isPolling = false;  // 동시 폴 실행 방지
 
 const spinners = ["⏳","🔍","⏳","🔄"];
 let si = 0;
@@ -97,7 +98,8 @@ function updateProgress() {
 }
 
 async function poll() {
-  if (stopped) return;
+  if (stopped || isPolling) return;
+  isPolling = true;
   attempt++;
   updateProgress();
 
@@ -142,11 +144,13 @@ async function poll() {
       // waiting
       document.getElementById("status-msg").textContent =
         "[" + attempt + "회 시도] " + (data.message || "잔여석 없음 — 재시도 중...");
+      isPolling = false;
       timerId = setTimeout(poll, INTERVAL_SEC * 1000);
     }
   } catch (err) {
     document.getElementById("status-msg").textContent =
       "[" + attempt + "회 시도] 네트워크 오류 — 재시도 중...";
+    isPolling = false;
     timerId = setTimeout(poll, INTERVAL_SEC * 1000);
   }
 }

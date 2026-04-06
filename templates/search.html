@@ -48,7 +48,8 @@
   <div class="card">
     <div class="card-title">🚄 검색 결과 ({{ trains|length }}개)</div>
 
-    <form method="POST" action="{{ url_for('reserve') }}">
+    <form method="POST" action="{{ url_for('reserve') }}" id="reserve-form">
+      <input type="hidden" name="submit_token" id="submit_token" value="">
       <div style="display: flex; flex-direction: column; gap: 12px;">
         {% for t in trains %}
         {% set soldout = not t.general_seat_available and not t.special_seat_available %}
@@ -126,12 +127,25 @@
             <option value="10">10초</option>
           </select>
         </div>
-        <button type="submit" class="btn btn-primary" style="margin-top: 4px;">
+        <button type="submit" id="btn-reserve" class="btn btn-primary" style="margin-top: 4px;">
           선택한 열차 예매하기
         </button>
       </div>
     </form>
   </div>
+
+<script>
+// 제출 토큰 초기화 (페이지 로드 시 고유값 부여)
+document.getElementById('submit_token').value = crypto.randomUUID();
+
+// 폼 제출 후 즉시 버튼 비활성화 → 중복 제출 방지
+document.getElementById('reserve-form').addEventListener('submit', function(e) {
+  const btn = document.getElementById('btn-reserve');
+  if (btn.disabled) { e.preventDefault(); return; }
+  btn.disabled = true;
+  btn.textContent = '예매 처리 중...';
+});
+</script>
   {% else %}
   <div class="card">
     <div class="alert alert-info">검색 결과가 없습니다. 날짜나 시간을 변경해 보세요.</div>

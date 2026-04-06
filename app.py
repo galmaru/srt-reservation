@@ -114,6 +114,14 @@ def reserve():
     if not session.get("srt_id"):
         return redirect(url_for("index"))
 
+    # 중복 제출 방지: 제출 토큰 확인
+    submit_token = request.form.get("submit_token", "")
+    if not submit_token or submit_token == session.get("last_submit_token"):
+        return render_template("reserve_result.html",
+                               error="중복 제출이 감지됐습니다. 검색 화면에서 다시 시도해주세요.",
+                               success=False)
+    session["last_submit_token"] = submit_token
+
     params = session.get("search_params", {})
     dep = params.get("dep")
     arr = params.get("arr")
