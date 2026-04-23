@@ -106,6 +106,10 @@ def _run_monitor(monitor_id: str, srt_id: str, srt_pw: str,
                     # 자동 예매
                     reservation = srt_bot.make_reservation(srt, target, adult_count, seat_type)
                     res_num = str(reservation.reservation_number)
+                    # 예매 성공 즉시 done으로 변경 — 이후 예외가 발생해도 루프 재진입(재예매) 차단
+                    _update_monitor(monitor_id, status="done",
+                                    reservation_number=res_num,
+                                    message="예매 완료 (결제 진행 중...)")
                     auto_paid = False
                     pay_error = None
                     if card_info:
@@ -121,9 +125,7 @@ def _run_monitor(monitor_id: str, srt_id: str, srt_pw: str,
                             auto_paid = True
                         except Exception as e:
                             pay_error = str(e)
-                    _update_monitor(monitor_id, status="done",
-                                    reservation_number=res_num,
-                                    auto_paid=auto_paid, pay_error=pay_error,
+                    _update_monitor(monitor_id, auto_paid=auto_paid, pay_error=pay_error,
                                     message="예매 완료" + (" + 결제 완료" if auto_paid else ""))
                     return
             else:
