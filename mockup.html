@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SRT / KTX 자동 예매 — 디자인 목업</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #e2e8f0; color: #1a202c; }
+
+    /* ── 목업 네비 ── */
+    .mockup-nav {
+      position: sticky; top: 0; z-index: 999;
+      background: #1e293b; color: white;
+      display: flex; align-items: center; gap: 0; padding: 0 24px; height: 52px;
+      overflow-x: auto;
+    }
+    .mockup-nav span { font-size: 0.8rem; color: #94a3b8; margin-right: 16px; white-space: nowrap; }
+    .mockup-nav a {
+      color: #cbd5e1; text-decoration: none; font-size: 0.82rem;
+      padding: 6px 14px; border-radius: 6px; white-space: nowrap;
+      transition: background 0.15s;
+    }
+    .mockup-nav a:hover, .mockup-nav a.active { background: #334155; color: white; }
+
+    /* ── 섹션 래퍼 ── */
+    .section { display: none; padding: 32px 24px; max-width: 960px; margin: 0 auto; }
+    .section.active { display: block; }
+    .section-title {
+      font-size: 0.75rem; font-weight: 700; letter-spacing: 1px;
+      color: #64748b; text-transform: uppercase; margin-bottom: 20px;
+    }
+
+    /* ── 앱 공통 스타일 ── */
+    header {
+      background: linear-gradient(135deg, #1a56db, #0e3a8a);
+      color: white; padding: 0 24px; height: 60px;
+      display: flex; align-items: center; justify-content: space-between;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+    header .logo { font-size: 1.1rem; font-weight: 700; }
+    header nav { display: flex; gap: 6px; align-items: center; }
+    header nav a {
+      color: rgba(255,255,255,0.85); text-decoration: none;
+      padding: 5px 12px; border-radius: 6px; font-size: 0.88rem;
+    }
+    header nav a:hover { background: rgba(255,255,255,0.15); }
+    .provider-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 3px 10px; border-radius: 99px; font-size: 0.75rem; font-weight: 700;
+    }
+    .badge-srt { background: rgba(255,255,255,0.2); color: white; }
+    .badge-ktx { background: rgba(239,68,68,0.3); color: #fca5a5; }
+
+    .card {
+      background: white; border-radius: 16px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08), 0 4px 16px rgba(0,0,0,0.06);
+      padding: 28px 32px; margin-bottom: 20px;
+    }
+    .card-title {
+      font-size: 1.15rem; font-weight: 700; margin-bottom: 20px;
+      padding-bottom: 14px; border-bottom: 2px solid #e2e8f0;
+    }
+    .form-group { margin-bottom: 16px; }
+    label {
+      display: block; font-size: 0.8rem; font-weight: 600; color: #4a5568;
+      margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.4px;
+    }
+    input, select {
+      width: 100%; padding: 10px 13px; border: 1.5px solid #e2e8f0;
+      border-radius: 8px; font-size: 0.95rem; color: #1a202c; background: #fafafa;
+    }
+    input:focus, select:focus { border-color: #1a56db; outline: none; background: white; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      gap: 6px; padding: 11px 22px; border-radius: 8px; font-size: 0.95rem;
+      font-weight: 600; cursor: pointer; border: none; text-decoration: none;
+    }
+    .btn-primary { background: linear-gradient(135deg,#1a56db,#1e40af); color: white; width: 100%; margin-top: 6px; }
+    .btn-ktx-primary { background: linear-gradient(135deg,#dc2626,#b91c1c); color: white; width: 100%; margin-top: 6px; }
+    .btn-success { background: #16a34a; color: white; }
+    .btn-danger { background: #dc2626; color: white; padding: 5px 12px; font-size: 0.82rem; }
+    .btn-outline { background: transparent; border: 1.5px solid #1a56db; color: #1a56db; padding: 8px 18px; font-size: 0.88rem; }
+    .btn-outline-red { background: transparent; border: 1.5px solid #dc2626; color: #dc2626; padding: 8px 18px; font-size: 0.88rem; }
+    .alert { padding: 12px 16px; border-radius: 10px; margin-bottom: 16px; font-size: 0.9rem; font-weight: 500; }
+    .alert-error { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
+    .alert-success { background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; }
+    .alert-info { background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; }
+    .alert-warning { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; }
+    .badge {
+      display: inline-block; padding: 2px 9px; border-radius: 99px; font-size: 0.76rem; font-weight: 600;
+    }
+    .badge-green { background: #dcfce7; color: #16a34a; }
+    .badge-red { background: #fee2e2; color: #dc2626; }
+    .badge-blue { background: #dbeafe; color: #1d4ed8; }
+    .badge-yellow { background: #fef9c3; color: #a16207; }
+    .badge-gray { background: #f1f5f9; color: #718096; }
+    .badge-srt-label { background: #dbeafe; color: #1d4ed8; }
+    .badge-ktx-label { background: #fee2e2; color: #dc2626; }
+
+    main { max-width: 860px; margin: 32px auto; padding: 0 20px; }
+
+    /* ── 로그인 탭 ── */
+    .provider-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 0; margin-bottom: 24px; border-radius: 12px; overflow: hidden; border: 2px solid #e2e8f0; }
+    .provider-tab {
+      padding: 14px; text-align: center; cursor: pointer; font-weight: 700;
+      font-size: 1rem; transition: all 0.2s;
+    }
+    .provider-tab.srt-active { background: #1a56db; color: white; }
+    .provider-tab.ktx-active { background: #dc2626; color: white; }
+    .provider-tab.inactive { background: #f8fafc; color: #718096; }
+
+    /* ── 열차 카드 ── */
+    .train-card {
+      border: 1.5px solid #e2e8f0; border-radius: 12px; padding: 16px 20px;
+      margin-bottom: 10px; cursor: pointer; transition: border-color 0.15s;
+    }
+    .train-card:hover { border-color: #1a56db; }
+    .train-card.ktx-hover:hover { border-color: #dc2626; }
+    .train-card.selected-srt { border-color: #1a56db; background: #eff6ff; }
+    .train-card.selected-ktx { border-color: #dc2626; background: #fff1f2; }
+
+    /* ── 모니터 카드 ── */
+    .monitor-card { border: 1.5px solid #e2e8f0; border-radius: 12px; padding: 18px 20px; margin-bottom: 12px; background: #fafafa; }
+    .monitor-card.done-border { border-color: #16a34a; }
+    .monitor-card.available-border { border-color: #f59e0b; }
+
+    /* ── 예매 결과 ── */
+    .result-box { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 16px 20px; margin-bottom: 20px; text-align: left; }
+    .result-box.ktx-result { background: #fff7ed; border-color: #fed7aa; }
+    .result-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 0.92rem; }
+
+    /* ── 구분선 ── */
+    hr { border: none; border-top: 1.5px solid #e2e8f0; margin: 20px 0; }
+  </style>
+</head>
+<body>
+
+<!-- 목업 네비게이션 -->
+<div class="mockup-nav">
+  <span>📐 목업</span>
+  <a href="#" class="active" onclick="showSection('login-srt')">로그인 SRT</a>
+  <a href="#" onclick="showSection('login-ktx')">로그인 KTX</a>
+  <a href="#" onclick="showSection('search-srt')">검색 SRT</a>
+  <a href="#" onclick="showSection('search-ktx')">검색 KTX</a>
+  <a href="#" onclick="showSection('result-srt')">예매결과 SRT</a>
+  <a href="#" onclick="showSection('result-ktx')">예매결과 KTX</a>
+  <a href="#" onclick="showSection('monitors')">모니터 목록</a>
+  <a href="#" onclick="showSection('reservations')">예매 내역</a>
+</div>
+
+
+<!-- ══════════════════════════════════════════
+     S1. 로그인 — SRT
+═══════════════════════════════════════════ -->
+<div id="login-srt" class="section active">
+  <div class="section-title">S1. 로그인 화면 — SRT 선택 상태</div>
+  <header>
+    <div class="logo">🚄 SRT / KTX 자동 예매</div>
+  </header>
+  <main>
+    <div style="max-width:420px; margin:48px auto;">
+      <div class="card">
+        <div style="text-align:center; margin-bottom:24px;">
+          <div style="font-size:2.2rem; margin-bottom:8px;">🚄</div>
+          <h1 style="font-size:1.4rem; font-weight:800;">열차 자동 예매</h1>
+        </div>
+
+        <!-- Provider 탭 -->
+        <div class="provider-tabs">
+          <div class="provider-tab srt-active">🔵 SRT</div>
+          <div class="provider-tab inactive">🔴 KTX (코레일)</div>
+        </div>
+
+        <p style="color:#718096; font-size:0.9rem; margin-bottom:20px; text-align:center;">SRT 계정으로 로그인하세요</p>
+
+        <div class="form-group">
+          <label>아이디</label>
+          <input type="text" placeholder="전화번호 / 이메일 / 멤버십번호">
+        </div>
+        <div class="form-group">
+          <label>비밀번호</label>
+          <input type="password" placeholder="SRT 비밀번호">
+        </div>
+        <button class="btn btn-primary" style="margin-top:14px;">로그인</button>
+        <p style="text-align:center; margin-top:16px; font-size:0.8rem; color:#a0aec0;">로그인 정보는 세션에만 저장되며 서버에 기록되지 않습니다</p>
+      </div>
+    </div>
+  </main>
+</div>
+
+
+<!-- ══════════════════════════════════════════
+     S2. 로그인 — KTX
+═══════════════════════════════════════════ -->
+<div id="login-ktx" class="section">
+  <div class="section-title">S2. 로그인 화면 — KTX 선택 상태</div>
+  <header style="background: linear-gradient(135deg,#dc2626,#991b1b);">
+    <div class="logo">🚄 SRT / KTX 자동 예매</div>
+  </header>
+  <main>
+    <div style="max-width:420px; margin:48px auto;">
+      <div class="card">
+        <div style="text-align:center; margin-bottom:24px;">
+          <div style="font-size:2.2rem; margin-bottom:8px;">🚄</div>
+          <h1 style="font-size:1.4rem; font-weight:800;">열차 자동 예매</h1>
+        </div>
+
+        <div class="provider-tabs">
+          <div class="provider-tab inactive">🔵 SRT</div>
+          <div class="provider-tab ktx-active">🔴 KTX (코레일)</div>
+        </div>
+
+        <p style="color:#718096; font-size:0.9rem; margin-bottom:20px; text-align:center;">KTX(코레일) 계정으로 로그인하세요</p>
+
+        <div class="alert alert-warning" style="font-size:0.85rem;">
+          ⚠ KTX는 예매만 가능합니다. 결제는 코레일 앱에서 직접 진행해야 합니다.
+        </div>
+
+        <div class="form-group">
+          <label>아이디</label>
+          <input type="text" placeholder="전화번호 / 이메일 / 멤버십번호">
+        </div>
+        <div class="form-group">
+          <label>비밀번호</label>
+          <input type="password" placeholder="코레일 비밀번호">
+        </div>
+        <button class="btn btn-ktx-primary" style="margin-top:14px;">로그인</button>
+        <p style="text-align:center; margin-top:16px; font-size:0.8rem; color:#a0aec0;">로그인 정보는 세션에만 저장되며 서버에 기록되지 않습니다</p>
+      </div>
+    </div>
+  </main>
+</div>
+
+
+<!-- ══════════════════════════════════════════
+     S3. 열차 검색 — SRT 로그인 상태
+═══════════════════════════════════════════ -->
+<div id="search-srt" class="section">
+  <div class="section-title">S3. 열차 검색 — SRT 로그인</div>
+  <header>
+    <div class="logo">🚄 SRT / KTX 자동 예매</div>
+    <nav>
+      <span class="provider-badge badge-srt">SRT</span>
+      <a href="#">열차 검색</a>
+      <a href="#">모니터</a>
+      <a href="#">예매 내역</a>
+      <a href="#" style="position:relative;">
+        카드 설정
+        <span style="position:absolute;top:-3px;right:-3px;width:7px;height:7px;background:#22c55e;border-radius:50%;"></span>
+      </a>
+      <a href="#">로그아웃</a>
+    </nav>
+  </header>
+  <main>
+    <!-- 검색 폼 -->
+    <div class="card">
+      <div class="card-title">🔍 열차 검색</div>
+      <div class="grid-2">
+        <div class="form-group">
+          <label>출발역</label>
+          <select><option>수서</option><option>동탄</option><option>대전</option><option>동대구</option><option>부산</option></select>
+        </div>
+        <div class="form-group">
+          <label>도착역</label>
+          <select><option>부산</option><option>동대구</option><option>대전</option><option>수서</option></select>
+        </div>
+      </div>
+      <div class="grid-2">
+        <div class="form-group">
+          <label>날짜</label>
+          <input type="date" value="2026-05-10">
+        </div>
+        <div class="form-group">
+          <label>출발 시각 이후</label>
+          <input type="time" value="08:00">
+        </div>
+      </div>
+      <button class="btn btn-primary">검색</button>
+    </div>
+
+    <!-- 검색 결과 -->
+    <div class="card">
+      <div class="card-title">🚄 검색 결과 (4개)</div>
+
+      <!-- 열차 1 - 선택됨 -->
+      <label>
+        <input type="radio" name="train" checked style="width:auto;margin-right:8px;">
+        <div class="train-card selected-srt" style="display:inline-block;vertical-align:top;width:calc(100% - 28px);">
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+            <div>
+              <span style="font-size:1rem;font-weight:700;color:#1a56db;">SRT 311</span>
+              <span style="color:#718096;font-size:0.82rem;margin-left:8px;">1시간 45분</span>
+            </div>
+            <div style="display:flex;gap:5px;">
+              <span class="badge badge-green">일반실 예매가능</span>
+              <span class="badge badge-red">특실 매진</span>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;margin-top:10px;">
+            <div style="text-align:center;"><div style="font-size:1.4rem;font-weight:800;">08:00</div><div style="font-size:0.8rem;color:#718096;">수서</div></div>
+            <div style="flex:1;text-align:center;color:#a0aec0;">→</div>
+            <div style="text-align:center;"><div style="font-size:1.4rem;font-weight:800;">09:45</div><div style="font-size:0.8rem;color:#718096;">부산</div></div>
+          </div>
+        </div>
+      </label>
+
+      <!-- 열차 2 - 매진 -->
+      <label style="margin-top:8px;display:block;">
+        <input type="radio" name="train" style="width:auto;margin-right:8px;">
+        <div class="train-card" style="display:inline-block;vertical-align:top;width:calc(100% - 28px);background:#f1f5f9;">
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+            <div>
+              <span style="font-size:1rem;font-weight:700;color:#1a56db;">SRT 313</span>
+              <span style="color:#718096;font-size:0.82rem;margin-left:8px;">1시간 48분</span>
+            </div>
+            <div style="display:flex;gap:5px;">
+              <span class="badge badge-red">일반실 매진</span>
+              <span class="badge badge-red">특실 매진</span>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;margin-top:10px;">
+            <div style="text-align:center;"><div style="font-size:1.4rem;font-weight:800;">09:00</div><div style="font-size:0.8rem;color:#718096;">수서</div></div>
+            <div style="flex:1;text-align:center;color:#a0aec0;">→</div>
+            <div style="text-align:center;"><div style="font-size:1.4rem;font-weight:800;">10:48</div><div style="font-size:0.8rem;color:#718096;">부산</div></div>
+          </div>
+        </div>
+      </label>
+
+      <hr>
+      <!-- 예매 옵션 -->
+      <div class="grid-2">
+        <div class="form-group">
+          <label>좌석 종류</label>
+          <select><option>일반실 우선</option><option>일반실만</option><option>특실 우선</option><option>특실만</option></select>
+        </div>
+        <div class="form-group">
+          <label>어른 인원수</label>
+          <select><option>1명</option><option>2명</option><option>3명</option></select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>재시도 간격</label>
+        <select><option>2초</option><option selected>3초 (기본)</option><option>5초</option><option>10초</option></select>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px;">
+        <button class="btn btn-outline" style="border-color:#f59e0b;color:#b45309;background:#fffbeb;">🔔 빈좌석 알림만</button>
+        <button class="btn btn-primary" style="margin-top:0;">⚡ 자동 예매하기</button>
+      </div>
+      <p style="font-size:0.78rem;color:#a0aec0;margin-top:8px;text-align:center;">알림만: 빈좌석 감지 후 직접 예매 &nbsp;|&nbsp; 자동 예매: 빈좌석 즉시 예매+결제</p>
+    </div>
+  </main>
+</div>
+
+
+<!-- ══════════════════════════════════════════
+     S4. 열차 검색 — KTX 로그인 상태
+═══════════════════════════════════════════ -->
+<div id="search-ktx" class="section">
+  <div class="section-title">S4. 열차 검색 — KTX 로그인 (카드 설정 메뉴 없음)</div>
+  <header style="background:linear-gradient(135deg,#dc2626,#991b1b);">
+    <div class="logo">🚄 SRT / KTX 자동 예매</div>
+    <nav>
+      <span class="provider-badge badge-ktx">KTX</span>
+      <a href="#">열차 검색</a>
+      <a href="#">모니터</a>
+      <a href="#">예매 내역</a>
+      <!-- 카드 설정 없음 -->
+      <a href="#">로그아웃</a>
+    </nav>
+  </header>
+  <main>
+    <div class="alert alert-warning" style="margin-bottom:16px;">
+      ⚠ KTX 모드: 예매 선점 후 <strong>코레일 앱에서 20분 내 결제</strong>가 필요합니다.
+    </div>
+    <div class="card">
+      <div class="card-title">🔍 열차 검색</div>
+      <div class="grid-2">
+        <div class="form-group">
+          <label>출발역</label>
+          <select><option>서울</option><option>용산</option><option>대전</option><option>동대구</option><option>부산</option></select>
+        </div>
+        <div class="form-group">
+          <label>도착역</label>
+          <select><option>부산</option><option>동대구</option><option>대전</option><option>서울</option></select>
+        </div>
+      </div>
+      <div class="grid-2">
+        <div class="form-group"><label>날짜</label><input type="date" value="2026-05-10"></div>
+        <div class="form-group"><label>출발 시각 이후</label><input type="time" value="08:00"></div>
+      </div>
+      <button class="btn btn-ktx-primary">검색</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🚄 검색 결과 (3개)</div>
+
+      <label>
+        <input type="radio" name="ktrain" checked style="width:auto;margin-right:8px;">
+        <div class="train-card selected-ktx" style="display:inline-block;vertical-align:top;width:calc(100% - 28px);">
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+            <div>
+              <span style="font-size:1rem;font-weight:700;color:#dc2626;">KTX 101</span>
+              <span style="color:#718096;font-size:0.82rem;margin-left:8px;">2시간 40분</span>
+            </div>
+            <div style="display:flex;gap:5px;">
+              <span class="badge badge-green">일반실 예매가능</span>
+              <span class="badge badge-blue">특실 예매가능</span>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;margin-top:10px;">
+            <div style="text-align:center;"><div style="font-size:1.4rem;font-weight:800;">08:05</div><div style="font-size:0.8rem;color:#718096;">서울</div></div>
+            <div style="flex:1;text-align:center;color:#a0aec0;">→</div>
+            <div style="text-align:center;"><div style="font-size:1.4rem;font-weight:800;">10:45</div><div style="font-size:0.8rem;color:#718096;">부산</div></div>
+          </div>
+        </div>
+      </label>
+
+      <label style="margin-top:8px;display:block;">
+        <input type="radio" name="ktrain" style="width:auto;margin-right:8px;">
+        <div class="train-card" style="display:inline-block;vertical-align:top;width:calc(100% - 28px);background:#f1f5f9;">
+          <div style="display:flex;align-items:center;justify-content:space-between;">
+            <div><span style="font-size:1rem;font-weight:700;color:#dc2626;">KTX 103</span><span style="color:#718096;font-size:0.82rem;margin-left:8px;">2시간 35분</span></div>
+            <div><span class="badge badge-red">일반실 매진</span>&nbsp;<span class="badge badge-red">특실 매진</span></div>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;margin-top:10px;">
+            <div style="text-align:center;"><div style="font-size:1.4rem;font-weight:800;">09:20</div><div style="font-size:0.8rem;color:#718096;">서울</div></div>
+            <div style="flex:1;text-align:center;color:#a0aec0;">→</div>
+            <div style="text-align:center;"><div style="font-size:1.4rem;font-weight:800;">11:55</div><div style="font-size:0.8rem;color:#718096;">부산</div></div>
+          </div>
+        </div>
+      </label>
+
+      <hr>
+      <div class="grid-2">
+        <div class="form-group"><label>좌석 종류</label><select><option>일반실 우선</option><option>일반실만</option><option>특실 우선</option><option>특실만</option></select></div>
+        <div class="form-group"><label>어른 인원수</label><select><option>1명</option><option>2명</option></select></div>
+      </div>
+      <div class="form-group"><label>재시도 간격</label><select><option selected>3초 (기본)</option><option>5초</option><option>10초</option></select></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px;">
+        <button class="btn" style="border:1.5px solid #f59e0b;color:#b45309;background:#fffbeb;font-weight:600;">🔔 빈좌석 알림만</button>
+        <button class="btn btn-ktx-primary" style="margin-top:0;">⚡ 자동 예매하기</button>
+      </div>
+      <p style="font-size:0.78rem;color:#a0aec0;margin-top:8px;text-align:center;">KTX는 예매 후 코레일 앱에서 20분 내 결제 필요</p>
+    </div>
+  </main>
+</div>
+
+
+<!-- ══════════════════════════════════════════
+     S5. 예매 결과 — SRT (자동결제 성공)
+═══════════════════════════════════════════ -->
+<div id="result-srt" class="section">
+  <div class="section-title">S5-A. 예매 결과 — SRT 자동결제 성공 &nbsp;/&nbsp; S5-B. SRT 카드 미저장</div>
+  <header><div class="logo">🚄 SRT / KTX 자동 예매</div><nav><span class="provider-badge badge-srt">SRT</span><a href="#">예매 내역</a></nav></header>
+  <main>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+      <!-- A: 자동결제 성공 -->
+      <div class="card" style="text-align:center;">
+        <div style="font-size:0.75rem;font-weight:700;color:#64748b;letter-spacing:1px;margin-bottom:12px;">S5-A. SRT 자동결제 성공</div>
+        <div style="font-size:2.8rem;margin-bottom:14px;">✅</div>
+        <h2 style="font-size:1.3rem;font-weight:800;color:#166534;margin-bottom:8px;">예매 &amp; 결제 완료!</h2>
+        <p style="color:#4a5568;margin-bottom:20px;">예약번호: <strong style="font-size:1.1rem;color:#1a56db;">20261234</strong></p>
+        <div class="result-box">
+          <div class="result-grid">
+            <div><span style="color:#718096;">노선</span><br><strong>수서 → 부산</strong></div>
+            <div><span style="color:#718096;">열차</span><br><strong>SRT 311</strong></div>
+          </div>
+        </div>
+        <a href="#" class="btn btn-primary">예매 내역 보기</a>
+      </div>
+
+      <!-- B: 카드 미저장 -->
+      <div class="card" style="text-align:center;">
+        <div style="font-size:0.75rem;font-weight:700;color:#64748b;letter-spacing:1px;margin-bottom:12px;">S5-B. SRT 예매 성공 (카드 미저장)</div>
+        <div style="font-size:2.8rem;margin-bottom:14px;">🎉</div>
+        <h2 style="font-size:1.3rem;font-weight:800;color:#166534;margin-bottom:8px;">예매 성공!</h2>
+        <p style="color:#4a5568;margin-bottom:20px;">예약번호: <strong style="font-size:1.1rem;color:#1a56db;">20261235</strong></p>
+        <div class="result-box">
+          <div class="result-grid">
+            <div><span style="color:#718096;">노선</span><br><strong>수서 → 부산</strong></div>
+            <div><span style="color:#718096;">열차</span><br><strong>SRT 313</strong></div>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;">
+          <a href="#" class="btn btn-success" style="flex:1;">결제하기</a>
+          <a href="#" class="btn btn-outline" style="flex:1;">카드 저장하기</a>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+
+<!-- ══════════════════════════════════════════
+     S6. 예매 결과 — KTX
+═══════════════════════════════════════════ -->
+<div id="result-ktx" class="section">
+  <div class="section-title">S6. 예매 결과 — KTX (결제 안내)</div>
+  <header style="background:linear-gradient(135deg,#dc2626,#991b1b);"><div class="logo">🚄 SRT / KTX 자동 예매</div><nav><span class="provider-badge badge-ktx">KTX</span><a href="#">예매 내역</a></nav></header>
+  <main>
+    <div style="max-width:520px;margin:0 auto;">
+      <div class="card" style="text-align:center;">
+        <div style="font-size:2.8rem;margin-bottom:14px;">🎉</div>
+        <h2 style="font-size:1.3rem;font-weight:800;color:#166534;margin-bottom:8px;">예매 성공!</h2>
+        <p style="color:#4a5568;margin-bottom:20px;">예약번호: <strong style="font-size:1.1rem;color:#dc2626;">K20261234</strong></p>
+
+        <div class="result-box ktx-result">
+          <div class="result-grid" style="margin-bottom:12px;">
+            <div><span style="color:#718096;">노선</span><br><strong>서울 → 부산</strong></div>
+            <div><span style="color:#718096;">열차</span><br><strong>KTX 101</strong></div>
+          </div>
+          <hr style="border-color:#fed7aa;">
+          <div style="margin-top:12px;text-align:left;">
+            <div style="font-size:0.85rem;font-weight:700;color:#92400e;margin-bottom:6px;">💳 결제 안내</div>
+            <p style="font-size:0.88rem;color:#78350f;line-height:1.6;">
+              KTX는 앱 내 자동결제를 지원하지 않습니다.<br>
+              <strong>코레일 앱(코레일톡)</strong> 또는 <strong>letskorail.com</strong>에서<br>
+              <strong style="color:#dc2626;">20분 이내</strong>에 결제를 완료해 주세요.
+            </p>
+          </div>
+        </div>
+
+        <a href="#" class="btn btn-primary" style="background:linear-gradient(135deg,#dc2626,#b91c1c);margin-bottom:10px;">예매 내역 보기</a>
+        <br>
+        <a href="#" style="font-size:0.85rem;color:#718096;text-decoration:underline;">새 열차 검색하기</a>
+      </div>
+    </div>
+  </main>
+</div>
+
+
+<!-- ══════════════════════════════════════════
+     S7. 모니터 목록 (SRT + KTX 혼합)
+═══════════════════════════════════════════ -->
+<div id="monitors" class="section">
+  <div class="section-title">S7. 모니터 목록 — SRT·KTX 혼합 상태</div>
+  <header><div class="logo">🚄 SRT / KTX 자동 예매</div><nav><span class="provider-badge badge-srt">SRT</span><a href="#">열차 검색</a><a href="#">모니터</a><a href="#">예매 내역</a><a href="#">카드 설정</a><a href="#">로그아웃</a></nav></header>
+  <main>
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;padding-bottom:14px;border-bottom:2px solid #e2e8f0;">
+        <div class="card-title" style="margin:0;padding:0;border:none;">📡 모니터 목록</div>
+        <a href="#" class="btn btn-outline" style="font-size:0.88rem;padding:7px 14px;">+ 새 모니터 등록</a>
+      </div>
+
+      <!-- 모니터 1: SRT 모니터링 중 -->
+      <div class="monitor-card">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+          <div>
+            <div style="font-weight:700;font-size:0.98rem;margin-bottom:4px;">
+              <span class="badge badge-srt-label" style="margin-right:6px;vertical-align:middle;">SRT</span>
+              SRT 313 &nbsp;·&nbsp; 수서 → 부산 &nbsp;·&nbsp; 09:00 출발
+            </div>
+            <div style="font-size:0.8rem;color:#a0aec0;">⚡ 자동 예매 모드 &nbsp;·&nbsp; 등록: 04/23 14:32 &nbsp;·&nbsp; 날짜: 2026-05-10</div>
+          </div>
+          <span class="badge badge-blue" style="font-size:0.8rem;">모니터링 중</span>
+        </div>
+        <div style="margin-top:10px;padding:9px 13px;background:#f1f5f9;border-radius:8px;font-size:0.85rem;color:#4a5568;">
+          [47회] 잔여석 없음 (일반실 매진 / 특실 매진)
+        </div>
+        <div style="margin-top:10px;">
+          <button class="btn btn-danger">모니터 중지</button>
+        </div>
+      </div>
+
+      <!-- 모니터 2: KTX 모니터링 중 -->
+      <div class="monitor-card">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+          <div>
+            <div style="font-weight:700;font-size:0.98rem;margin-bottom:4px;">
+              <span class="badge badge-ktx-label" style="margin-right:6px;vertical-align:middle;">KTX</span>
+              KTX 103 &nbsp;·&nbsp; 서울 → 부산 &nbsp;·&nbsp; 09:20 출발
+            </div>
+            <div style="font-size:0.8rem;color:#a0aec0;">🔔 알림 모드 &nbsp;·&nbsp; 등록: 04/23 14:40 &nbsp;·&nbsp; 날짜: 2026-05-10</div>
+          </div>
+          <span class="badge badge-blue" style="font-size:0.8rem;">모니터링 중</span>
+        </div>
+        <div style="margin-top:10px;padding:9px 13px;background:#f1f5f9;border-radius:8px;font-size:0.85rem;color:#4a5568;">
+          [23회] 잔여석 없음 (일반실 매진 / 특실 매진)
+        </div>
+        <div style="margin-top:10px;">
+          <button class="btn btn-danger">모니터 중지</button>
+        </div>
+      </div>
+
+      <!-- 모니터 3: SRT 예매 완료 (자동결제) -->
+      <div class="monitor-card done-border">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+          <div>
+            <div style="font-weight:700;font-size:0.98rem;margin-bottom:4px;">
+              <span class="badge badge-srt-label" style="margin-right:6px;vertical-align:middle;">SRT</span>
+              SRT 311 &nbsp;·&nbsp; 수서 → 동대구 &nbsp;·&nbsp; 08:00 출발
+            </div>
+            <div style="font-size:0.8rem;color:#a0aec0;">⚡ 자동 예매 모드 &nbsp;·&nbsp; 등록: 04/23 12:00 &nbsp;·&nbsp; 날짜: 2026-05-10</div>
+          </div>
+          <span class="badge badge-green" style="font-size:0.8rem;">✅ 예매 완료</span>
+        </div>
+        <div style="margin-top:10px;padding:9px 13px;background:#f0fdf4;border-radius:8px;font-size:0.85rem;color:#166534;">
+          예매 완료 + 결제 완료 (예약번호: 20261100)
+        </div>
+        <div style="margin-top:10px;">
+          <button class="btn btn-outline" style="font-size:0.82rem;padding:5px 12px;">삭제</button>
+        </div>
+      </div>
+
+      <!-- 모니터 4: KTX 예매 완료 (결제 필요) -->
+      <div class="monitor-card done-border" style="border-color:#f59e0b;">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+          <div>
+            <div style="font-weight:700;font-size:0.98rem;margin-bottom:4px;">
+              <span class="badge badge-ktx-label" style="margin-right:6px;vertical-align:middle;">KTX</span>
+              KTX 101 &nbsp;·&nbsp; 서울 → 부산 &nbsp;·&nbsp; 08:05 출발
+            </div>
+            <div style="font-size:0.8rem;color:#a0aec0;">⚡ 자동 예매 모드 &nbsp;·&nbsp; 등록: 04/23 11:30 &nbsp;·&nbsp; 날짜: 2026-05-10</div>
+          </div>
+          <span class="badge badge-green" style="font-size:0.8rem;">✅ 예매 완료</span>
+        </div>
+        <div style="margin-top:10px;padding:9px 13px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;font-size:0.85rem;color:#92400e;">
+          예매 완료 (예약번호: K20261050) — 코레일 앱에서 20분 내 결제하세요
+        </div>
+        <div style="margin-top:10px;">
+          <button class="btn btn-outline" style="font-size:0.82rem;padding:5px 12px;">삭제</button>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+
+<!-- ══════════════════════════════════════════
+     S8. 예매 내역 (SRT + KTX 혼합)
+═══════════════════════════════════════════ -->
+<div id="reservations" class="section">
+  <div class="section-title">S8. 예매 내역 — SRT·KTX 혼합</div>
+  <header><div class="logo">🚄 SRT / KTX 자동 예매</div><nav><span class="provider-badge badge-srt">SRT</span><a href="#">열차 검색</a><a href="#">모니터</a><a href="#">예매 내역</a><a href="#">카드 설정</a><a href="#">로그아웃</a></nav></header>
+  <main>
+    <div class="card">
+      <div class="card-title">📋 예매 내역</div>
+      <div style="display:flex;flex-direction:column;gap:12px;">
+
+        <!-- SRT 결제완료 -->
+        <div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:12px;padding:16px 20px;">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+            <div>
+              <div style="font-weight:700;font-size:0.98rem;margin-bottom:4px;">
+                <span class="badge badge-srt-label" style="margin-right:6px;">SRT</span>수서 → 부산
+              </div>
+              <div style="color:#718096;font-size:0.85rem;">예약번호: <strong style="color:#1a202c;">20261100</strong></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+              <span class="badge badge-green">결제완료</span>
+              <form><button class="btn btn-danger">취소</button></form>
+            </div>
+          </div>
+        </div>
+
+        <!-- SRT 미결제 -->
+        <div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:12px;padding:16px 20px;">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+            <div>
+              <div style="font-weight:700;font-size:0.98rem;margin-bottom:4px;">
+                <span class="badge badge-srt-label" style="margin-right:6px;">SRT</span>수서 → 동대구
+              </div>
+              <div style="color:#718096;font-size:0.85rem;">예약번호: <strong style="color:#1a202c;">20261235</strong></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+              <span class="badge badge-yellow">미결제</span>
+              <a href="#" class="btn btn-success" style="padding:5px 12px;font-size:0.82rem;">결제하기</a>
+              <form><button class="btn btn-danger">취소</button></form>
+            </div>
+          </div>
+        </div>
+
+        <!-- KTX 미결제 (결제하기 버튼 없음) -->
+        <div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:12px;padding:16px 20px;">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+            <div>
+              <div style="font-weight:700;font-size:0.98rem;margin-bottom:4px;">
+                <span class="badge badge-ktx-label" style="margin-right:6px;">KTX</span>서울 → 부산
+              </div>
+              <div style="color:#718096;font-size:0.85rem;">예약번호: <strong style="color:#1a202c;">K20261050</strong></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+              <span class="badge badge-yellow">미결제</span>
+              <span style="font-size:0.8rem;color:#92400e;background:#fffbeb;border:1px solid #fde68a;padding:3px 9px;border-radius:6px;">코레일 앱에서 결제</span>
+              <form><button class="btn btn-danger">취소</button></form>
+            </div>
+          </div>
+        </div>
+
+      </div>
+      <div style="margin-top:18px;display:flex;gap:10px;flex-wrap:wrap;">
+        <a href="#" class="btn btn-outline">새 열차 검색</a>
+        <a href="#" class="btn btn-outline">모니터 목록</a>
+      </div>
+    </div>
+  </main>
+</div>
+
+
+<script>
+  function showSection(id) {
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.mockup-nav a').forEach(a => a.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    event.target.classList.add('active');
+  }
+</script>
+</body>
+</html>
