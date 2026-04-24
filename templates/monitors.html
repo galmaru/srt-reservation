@@ -93,13 +93,14 @@
 const BADGE = {
   running:   '<span class="badge badge-blue" style="font-size:0.82rem;">모니터링 중</span>',
   available: '<span class="badge badge-yellow" style="font-size:0.82rem;">🔔 빈좌석 발생!</span>',
+  paying:    '<span class="badge badge-blue" style="font-size:0.82rem;">💳 결제 진행 중...</span>',
   done:      '<span class="badge badge-green" style="font-size:0.82rem;">✅ 예매 완료</span>',
   cancelled: '<span class="badge" style="background:#f1f5f9;color:#718096;font-size:0.82rem;">중지됨</span>',
   error:     '<span class="badge badge-red" style="font-size:0.82rem;">오류</span>',
 };
 
 const RUNNING_IDS = [
-  {% for m in monitors %}{% if m.status == 'running' %}"{{ m.id }}",{% endif %}{% endfor %}
+  {% for m in monitors %}{% if m.status in ['running', 'paying'] %}"{{ m.id }}",{% endif %}{% endfor %}
 ];
 
 function updateCard(id, data) {
@@ -121,7 +122,9 @@ function updateCard(id, data) {
 
   // 버튼 갱신
   if (actions) {
-    if (data.status === 'available') {
+    if (data.status === 'paying') {
+      actions.innerHTML = ''; // 결제 중엔 버튼 없음
+    } else if (data.status === 'available') {
       actions.innerHTML = `
         <a href="/search" class="btn btn-primary" style="font-size:0.85rem;padding:6px 14px;">지금 예매하기</a>
         <button class="btn btn-outline" style="font-size:0.85rem;padding:6px 14px;"
@@ -146,7 +149,7 @@ function pollMonitor(id) {
     .then(r => r.json())
     .then(data => {
       updateCard(id, data);
-      if (data.status === 'running') {
+      if (data.status === 'running' || data.status === 'paying') {
         setTimeout(() => pollMonitor(id), 2000);
       }
     })

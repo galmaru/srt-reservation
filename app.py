@@ -106,8 +106,8 @@ def _run_monitor(monitor_id: str, srt_id: str, srt_pw: str,
                     # 자동 예매
                     reservation = srt_bot.make_reservation(srt, target, adult_count, seat_type)
                     res_num = str(reservation.reservation_number)
-                    # 예매 성공 즉시 done으로 변경 — 이후 예외가 발생해도 루프 재진입(재예매) 차단
-                    _update_monitor(monitor_id, status="done",
+                    # 예매 성공: paying 상태로 전환 — 루프 재진입(재예매) 차단 + 브라우저 polling 유지
+                    _update_monitor(monitor_id, status="paying",
                                     reservation_number=res_num,
                                     message="예매 완료 (결제 진행 중...)")
                     auto_paid = False
@@ -125,7 +125,9 @@ def _run_monitor(monitor_id: str, srt_id: str, srt_pw: str,
                             auto_paid = True
                         except Exception as e:
                             pay_error = str(e)
-                    _update_monitor(monitor_id, auto_paid=auto_paid, pay_error=pay_error,
+                    # 결제 완료 후 done으로 전환 — 브라우저가 최종 결과를 수신하고 polling 종료
+                    _update_monitor(monitor_id, status="done",
+                                    auto_paid=auto_paid, pay_error=pay_error,
                                     message="예매 완료" + (" + 결제 완료" if auto_paid else ""))
                     return
             else:
