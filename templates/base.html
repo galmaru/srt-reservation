@@ -168,13 +168,6 @@
         <a href="{{ url_for('search') }}">열차 검색</a>
         <a href="{{ url_for('monitors') }}">모니터</a>
         <a href="{{ url_for('reservations') }}">예매 내역</a>
-        <a href="{{ url_for('card_settings') }}" style="position:relative;">
-          카드 설정
-          {% if session.get('card_saved') %}
-            <span style="position:absolute;top:-4px;right:-4px;width:8px;height:8px;
-                         background:#22c55e;border-radius:50%;"></span>
-          {% endif %}
-        </a>
         <a href="{{ url_for('logout') }}">로그아웃</a>
       {% endif %}
     </nav>

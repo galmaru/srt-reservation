@@ -64,10 +64,6 @@
           <button class="btn btn-outline" style="font-size:0.85rem; padding:6px 14px;"
                   onclick="deleteMonitor('{{ m.id }}')">삭제</button>
         {% elif m.status == 'done' %}
-          {% if not m.auto_paid %}
-            <a href="/pay?res_id={{ m.reservation_number }}"
-               class="btn btn-success" style="font-size:0.85rem; padding:6px 14px;">결제하기</a>
-          {% endif %}
           <button class="btn btn-outline" style="font-size:0.85rem; padding:6px 14px;"
                   onclick="deleteMonitor('{{ m.id }}')">삭제</button>
         {% else %}
@@ -130,10 +126,7 @@ function updateCard(id, data) {
         <button class="btn btn-outline" style="font-size:0.85rem;padding:6px 14px;"
                 onclick="deleteMonitor('${id}')">삭제</button>`;
     } else if (data.status === 'done') {
-      const payBtn = !data.auto_paid
-        ? `<a href="/pay?res_id=${data.reservation_number}" class="btn btn-success" style="font-size:0.85rem;padding:6px 14px;">결제하기</a>`
-        : '';
-      actions.innerHTML = payBtn +
+      actions.innerHTML =
         `<button class="btn btn-outline" style="font-size:0.85rem;padding:6px 14px;"
                  onclick="deleteMonitor('${id}')">삭제</button>`;
     } else if (data.status !== 'running') {
