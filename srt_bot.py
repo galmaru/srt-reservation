@@ -47,6 +47,13 @@ def make_reservation(srt: SRT, train, adult_count: int = 1, seat_type_key: str =
     return srt.reserve(train, passengers=passengers, special_seat=seat_type)
 
 
+def make_waiting_reservation(srt: SRT, train, adult_count: int = 1, seat_type_key: str = "GENERAL_FIRST"):
+    """예약대기 등록"""
+    passengers = [Adult(adult_count)]
+    seat_type = SEAT_TYPE_MAP.get(seat_type_key, SeatType.GENERAL_FIRST)
+    return srt.reserve(train, passengers=passengers, special_seat=seat_type, reserve_waiting=True)
+
+
 def pay_reservation(
     srt: SRT,
     reservation,

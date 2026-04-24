@@ -1,3 +1,4 @@
 SRTrain @ git+https://github.com/ryanking13/SRT.git
+korail2
 python-dotenv
 flask

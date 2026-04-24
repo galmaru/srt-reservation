@@ -4,8 +4,31 @@
   <div class="card">
     <div style="text-align:center; margin-bottom: 28px;">
       <div style="font-size: 2.5rem; margin-bottom: 8px;">🚄</div>
-      <h1 style="font-size: 1.5rem; font-weight: 800; color: #1a202c;">SRT 자동 예매</h1>
-      <p style="color: #718096; margin-top: 6px; font-size: 0.95rem;">SRT 계정으로 로그인하세요</p>
+      <h1 style="font-size: 1.5rem; font-weight: 800; color: #1a202c;">열차 자동 예매</h1>
+    </div>
+
+    <!-- SRT / KTX 탭 -->
+    <div style="display:grid; grid-template-columns:1fr 1fr; border-radius:10px; overflow:hidden;
+                border:1.5px solid #e2e8f0; margin-bottom:24px;" id="provider-tabs">
+      <button type="button" id="tab-srt"
+              onclick="selectProvider('srt')"
+              style="padding:10px; font-size:0.95rem; font-weight:700; border:none; cursor:pointer;
+                     background:#1a56db; color:white; transition:all 0.15s;">
+        SRT
+      </button>
+      <button type="button" id="tab-ktx"
+              onclick="selectProvider('ktx')"
+              style="padding:10px; font-size:0.95rem; font-weight:700; border:none; cursor:pointer;
+                     background:#f1f5f9; color:#718096; transition:all 0.15s;">
+        KTX
+      </button>
+    </div>
+
+    <!-- KTX 안내 문구 -->
+    <div id="ktx-notice" style="display:none; margin-bottom:16px;">
+      <div class="alert alert-info" style="font-size:0.88rem;">
+        ℹ️ KTX 예매 후 코레일 앱에서 <strong>20분 이내</strong> 직접 결제해야 합니다.
+      </div>
     </div>
 
     {% if error %}
@@ -13,22 +36,60 @@
     {% endif %}
 
     <form method="POST" action="{{ url_for('login') }}">
+      <input type="hidden" name="provider" id="provider-input" value="{{ provider or 'srt' }}">
       <div class="form-group">
-        <label>아이디</label>
-        <input type="text" name="srt_id" placeholder="전화번호 / 이메일 / 멤버십번호" required autofocus>
+        <label id="label-id">아이디</label>
+        <input type="text" name="train_id" id="train-id-input"
+               placeholder="전화번호 / 이메일 / 멤버십번호" required autofocus>
       </div>
       <div class="form-group">
         <label>비밀번호</label>
-        <input type="password" name="srt_pw" placeholder="SRT 비밀번호" required>
+        <input type="password" name="train_pw"
+               placeholder="비밀번호" required>
       </div>
-      <button type="submit" class="btn btn-primary" style="margin-top: 16px;">
+      <button type="submit" class="btn btn-primary" id="login-btn" style="margin-top:16px;">
         로그인
       </button>
     </form>
 
-    <p style="text-align:center; margin-top: 20px; font-size: 0.85rem; color: #a0aec0;">
+    <p style="text-align:center; margin-top:20px; font-size:0.85rem; color:#a0aec0;">
       로그인 정보는 세션에만 저장되며 서버에 기록되지 않습니다
     </p>
   </div>
 </div>
+
+<script>
+const PROVIDER_STYLE = {
+  srt: { bg: '#1a56db', color: 'white' },
+  ktx: { bg: '#dc2626', color: 'white' },
+};
+
+function selectProvider(p) {
+  document.getElementById('provider-input').value = p;
+
+  const tabSrt = document.getElementById('tab-srt');
+  const tabKtx = document.getElementById('tab-ktx');
+  const ktxNotice = document.getElementById('ktx-notice');
+  const loginBtn  = document.getElementById('login-btn');
+
+  if (p === 'srt') {
+    tabSrt.style.background = '#1a56db';
+    tabSrt.style.color = 'white';
+    tabKtx.style.background = '#f1f5f9';
+    tabKtx.style.color = '#718096';
+    ktxNotice.style.display = 'none';
+    loginBtn.style.background = 'linear-gradient(135deg,#1a56db,#1e40af)';
+  } else {
+    tabKtx.style.background = '#dc2626';
+    tabKtx.style.color = 'white';
+    tabSrt.style.background = '#f1f5f9';
+    tabSrt.style.color = '#718096';
+    ktxNotice.style.display = 'block';
+    loginBtn.style.background = 'linear-gradient(135deg,#dc2626,#b91c1c)';
+  }
+}
+
+// 초기 provider 설정
+selectProvider('{{ provider or "srt" }}');
+</script>
 {% endblock %}
