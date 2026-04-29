@@ -466,12 +466,20 @@ def pay():
     card_expire     = request.form.get("card_expire", "").replace("/", "")
     installment     = int(request.form.get("installment", 0))
 
+    def _norm(n):
+        """예약번호를 숫자 문자열로 정규화 (앞자리 0, 공백 차이 허용)"""
+        return str(n or "").strip().lstrip("0")
+
     try:
         reservations = srt_bot.get_reservations(client)
-        target = next((r for r in reservations if str(r.reservation_number) == str(res_number)), None)
+        target = next(
+            (r for r in reservations if _norm(r.reservation_number) == _norm(res_number)),
+            None,
+        )
         if not target:
+            found = ", ".join(str(r.reservation_number) for r in reservations) or "없음"
             return render_template("pay.html", reservation_id=res_number,
-                                   error="예매 내역을 찾을 수 없습니다.")
+                                   error=f"예매 내역을 찾을 수 없습니다. (조회된 예약번호: {found})")
         srt_bot.pay_reservation(client, target, card_number, card_password,
                                 card_validation, card_expire, installment)
         return render_template("pay.html", reservation_id=res_number, success=True)
