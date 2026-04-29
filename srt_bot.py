@@ -28,16 +28,20 @@ def login(srt_id: str, srt_pw: str) -> SRT:
     return SRT(srt_id, srt_pw, netfunnel_helper=netfunnel)
 
 
+def _patch_train(train):
+    """SRTTrain에 없는 waiting_available() 메서드를 동적으로 추가"""
+    if not hasattr(train, "waiting_available"):
+        # SRTrain 라이브러리가 waiting_available을 지원하지 않으면 항상 False 반환
+        train.waiting_available = lambda: (
+            getattr(train, "reserve_wait_possible_flag", "") == "Y"
+        )
+    return train
+
+
 def search_trains(srt: SRT, dep: str, arr: str, date: str, time: str, available_only: bool = False):
-    """
-    열차 검색
-    date: yyyyMMdd 형식 (예: 20260403)
-    time: HHmmss 형식 (예: 080000)
-    available_only: False면 매진 열차도 표시 (기본값)
-    """
-    # 매 검색마다 NetFunnel 캐시를 초기화해 "Wrong Server ID" 에러 방지
     srt.netfunnel_helper = NetFunnelHelper()
-    return srt.search_train(dep, arr, date=date, time=time, available_only=available_only)
+    trains = srt.search_train(dep, arr, date=date, time=time, available_only=available_only)
+    return [_patch_train(t) for t in trains]
 
 
 def make_reservation(srt: SRT, train, adult_count: int = 1, seat_type_key: str = "GENERAL_FIRST"):
