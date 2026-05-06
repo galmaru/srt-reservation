@@ -10,6 +10,7 @@ from flask import Flask, render_template, request, session, redirect, url_for, j
 import srt_bot
 import korail_bot
 import slack_notifier
+import ntfy_notifier
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", os.urandom(24))
@@ -68,7 +69,7 @@ def _run_monitor(monitor_id: str, provider: str, train_id: str, train_pw: str,
                  dep: str, arr: str, date: str, time_str: str,
                  train_dep_time: str, train_name: str, dep_time_display: str,
                  adult_count: int, seat_type: str, interval: int,
-                 card_info: Optional[dict], slack_url: str):
+                 card_info: Optional[dict], slack_url: str, ntfy_url: str = ""):
 
     bot = _bot_module(provider)
     attempt = 0
@@ -105,6 +106,11 @@ def _run_monitor(monitor_id: str, provider: str, train_id: str, train_pw: str,
                         dep, arr, train_name, dep_time_display, res_num,
                         is_background=True,
                     )
+                    ntfy_notifier.send(
+                        ntfy_url, provider, "예매",
+                        dep, arr, train_name, dep_time_display, res_num,
+                        is_background=True,
+                    )
                     return
                 except Exception:
                     pass  # 예매 실패 → 예약대기 시도
@@ -122,6 +128,11 @@ def _run_monitor(monitor_id: str, provider: str, train_id: str, train_pw: str,
                                     message=f"예약대기 등록 완료 (예약번호: {res_num})")
                     slack_notifier.send(
                         slack_url, provider, "예약대기",
+                        dep, arr, train_name, dep_time_display, res_num,
+                        is_background=True,
+                    )
+                    ntfy_notifier.send(
+                        ntfy_url, provider, "예약대기",
                         dep, arr, train_name, dep_time_display, res_num,
                         is_background=True,
                     )
@@ -152,7 +163,7 @@ def _start_monitor(provider, train_id, train_pw,
                    dep, arr, date, time_str,
                    train_dep_time, train_name, dep_time_display,
                    adult_count, seat_type, interval,
-                   card_info, slack_url) -> str:
+                   card_info, slack_url, ntfy_url="") -> str:
     monitor_id = str(uuid.uuid4())
     with _monitor_lock:
         _monitors[monitor_id] = {
@@ -181,7 +192,7 @@ def _start_monitor(provider, train_id, train_pw,
               dep, arr, date, time_str,
               train_dep_time, train_name, dep_time_display,
               adult_count, seat_type, interval,
-              card_info, slack_url),
+              card_info, slack_url, ntfy_url),
         daemon=True,
     )
     t.start()
@@ -302,16 +313,21 @@ def reserve():
         return render_template("reserve_result.html", error=str(e), success=False)
 
     slack_url = session.get("slack_webhook_url") or os.environ.get("SLACK_WEBHOOK_URL", "")
+    ntfy_url  = session.get("ntfy_topic_url")  or os.environ.get("NTFY_TOPIC_URL", "")
 
     # 잔여석 있음 → 즉시 예매
     if train.seat_available():
         try:
             reservation = bot.make_reservation(client, train, adult_count, seat_type)
+            dep_time_disp = f"{train.dep_time[:2]}:{train.dep_time[2:4]}"
+            res_num = str(reservation.reservation_number)
             slack_notifier.send(
                 slack_url, provider, "예매",
-                dep, arr, train.train_name,
-                f"{train.dep_time[:2]}:{train.dep_time[2:4]}",
-                str(reservation.reservation_number),
+                dep, arr, train.train_name, dep_time_disp, res_num,
+            )
+            ntfy_notifier.send(
+                ntfy_url, provider, "예매",
+                dep, arr, train.train_name, dep_time_disp, res_num,
             )
             return render_template("reserve_result.html", reservation=reservation,
                                    success=True, provider=provider)
@@ -330,7 +346,7 @@ def reserve():
         dep_time_display=train.dep_time[:2] + ":" + train.dep_time[2:4],
         adult_count=adult_count, seat_type=seat_type,
         interval=interval, card_info=card_info,
-        slack_url=slack_url,
+        slack_url=slack_url, ntfy_url=ntfy_url,
     )
     return redirect(url_for("monitors"))
 
