@@ -30,12 +30,13 @@
           </div>
         </div>
         <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-          {% if r.is_paid %}
+          {% if provider == 'ktx' %}
+            {# KTX: 항상 미결제, 앱에서 결제 안내 #}
+            <span class="badge badge-yellow">미결제</span>
+          {% elif r.is_paid %}
             <span class="badge badge-green">결제완료</span>
           {% else %}
             <span class="badge badge-yellow">미결제</span>
-            <a href="{{ url_for('pay') }}?res_id={{ r.reservation_number }}"
-               class="btn btn-success" style="padding: 6px 14px; font-size: 0.85rem;">결제하기</a>
           {% endif %}
           <form method="POST" action="{{ url_for('cancel', res_number=r.reservation_number) }}"
                 onsubmit="return confirm('정말 취소하시겠습니까?')">
@@ -43,6 +44,11 @@
           </form>
         </div>
       </div>
+      {% if provider == 'ktx' %}
+      <div style="margin-top:10px; font-size:0.85rem; color:#6b7280;">
+        ℹ️ 코레일 앱에서 결제해주세요.
+      </div>
+      {% endif %}
     </div>
     {% endfor %}
   </div>

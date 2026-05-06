@@ -3,56 +3,20 @@
 <div style="max-width: 520px; margin: 0 auto;">
   <div class="card" style="text-align: center;">
     {% if success %}
-      {% if pay_success %}
-        {# 예매 + 자동결제 모두 성공 #}
-        <div style="font-size: 3rem; margin-bottom: 16px;">✅</div>
-        <h2 style="font-size: 1.4rem; font-weight: 800; color: #166534; margin-bottom: 8px;">예매 & 결제 완료!</h2>
-        <p style="color: #4a5568; margin-bottom: 24px;">
-          예약번호: <strong style="font-size: 1.1rem; color: #1a56db;">{{ reservation.reservation_number }}</strong>
-        </p>
-        <div style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:10px; padding:16px 20px; margin-bottom:24px; text-align:left;">
-          <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; font-size:0.95rem;">
-            <div><span style="color:#718096;">노선</span><br>
-                 <strong>{{ reservation.dep_station_name }} → {{ reservation.arr_station_name }}</strong></div>
-            <div><span style="color:#718096;">열차</span><br>
-                 <strong>{{ reservation.train_name }}</strong></div>
-          </div>
+      <div style="font-size: 3rem; margin-bottom: 16px;">🎉</div>
+      <h2 style="font-size: 1.4rem; font-weight: 800; color: #166534; margin-bottom: 8px;">예매 성공!</h2>
+      <p style="color: #4a5568; margin-bottom: 24px;">
+        예약번호: <strong style="font-size: 1.1rem; color: #1a56db;">{{ reservation.reservation_number }}</strong>
+      </p>
+      <div style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:10px; padding:16px 20px; margin-bottom:24px; text-align:left;">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; font-size:0.95rem;">
+          <div><span style="color:#718096;">노선</span><br>
+               <strong>{{ reservation.dep_station_name }} → {{ reservation.arr_station_name }}</strong></div>
+          <div><span style="color:#718096;">열차</span><br>
+               <strong>{{ reservation.train_name }}</strong></div>
         </div>
-        <a href="{{ url_for('reservations') }}" class="btn btn-primary">예매 내역 보기</a>
-
-      {% elif pay_error %}
-        {# 예매 성공, 결제 실패 #}
-        <div style="font-size: 3rem; margin-bottom: 16px;">⚠️</div>
-        <h2 style="font-size: 1.4rem; font-weight: 800; color: #92400e; margin-bottom: 8px;">예매 완료, 결제 실패</h2>
-        <p style="color: #4a5568; margin-bottom: 12px;">
-          예약번호: <strong style="font-size: 1.1rem; color: #1a56db;">{{ reservation.reservation_number }}</strong>
-        </p>
-        <div class="alert alert-error" style="text-align:left; margin-bottom:20px;">{{ pay_error }}</div>
-        <div style="display: flex; gap: 12px;">
-          <a href="{{ url_for('pay') }}?res_id={{ reservation.reservation_number }}" class="btn btn-success" style="flex:1;">직접 결제하기</a>
-          <a href="{{ url_for('reservations') }}" class="btn btn-outline" style="flex:1;">예매 내역 보기</a>
-        </div>
-
-      {% else %}
-        {# 예매 성공, 카드 정보 없음 #}
-        <div style="font-size: 3rem; margin-bottom: 16px;">🎉</div>
-        <h2 style="font-size: 1.4rem; font-weight: 800; color: #166534; margin-bottom: 8px;">예매 성공!</h2>
-        <p style="color: #4a5568; margin-bottom: 24px;">
-          예약번호: <strong style="font-size: 1.1rem; color: #1a56db;">{{ reservation.reservation_number }}</strong>
-        </p>
-        <div style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:10px; padding:16px 20px; margin-bottom:24px; text-align:left;">
-          <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; font-size:0.95rem;">
-            <div><span style="color:#718096;">노선</span><br>
-                 <strong>{{ reservation.dep_station_name }} → {{ reservation.arr_station_name }}</strong></div>
-            <div><span style="color:#718096;">열차</span><br>
-                 <strong>{{ reservation.train_name }}</strong></div>
-          </div>
-        </div>
-        <div style="display: flex; gap: 12px;">
-          <a href="{{ url_for('pay') }}?res_id={{ reservation.reservation_number }}" class="btn btn-success" style="flex:1;">결제하기</a>
-          <a href="{{ url_for('card_settings') }}" class="btn btn-outline" style="flex:1;">카드 저장하기</a>
-        </div>
-      {% endif %}
+      </div>
+      <a href="{{ url_for('reservations') }}" class="btn btn-primary">예매 내역 보기</a>
 
     {% else %}
       <div style="font-size: 3rem; margin-bottom: 16px;">❌</div>

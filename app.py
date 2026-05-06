@@ -1,4 +1,4 @@
-"""SRT 자동 예매 웹 앱"""
+"""SRT / KTX 자동 예매 웹 앱"""
 
 import os
 import uuid
@@ -8,6 +8,9 @@ from datetime import datetime
 from typing import Optional
 from flask import Flask, render_template, request, session, redirect, url_for, jsonify, flash
 import srt_bot
+import korail_bot
+import slack_notifier
+import ntfy_notifier
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", os.urandom(24))
@@ -27,44 +30,33 @@ _monitor_lock = threading.Lock()
 # 헬퍼
 # ──────────────────────────────────────────────
 
-def get_srt() -> Optional[srt_bot.SRT]:
-    srt_id = session.get("srt_id")
-    srt_pw = session.get("srt_pw")
-    if not srt_id or not srt_pw:
+def _bot_module(provider: str):
+    """provider에 맞는 bot 모듈 반환"""
+    return srt_bot if provider == "srt" else korail_bot
+
+
+def get_client():
+    """현재 세션 자격증명으로 로그인한 client 반환"""
+    train_id = session.get("train_id")
+    train_pw = session.get("train_pw")
+    provider = session.get("provider", "srt")
+    if not train_id or not train_pw:
         return None
     try:
-        return srt_bot.login(srt_id, srt_pw)
+        return _bot_module(provider).login(train_id, train_pw)
     except Exception:
         return None
 
 
-def auto_pay_if_saved(srt, reservation):
-    """저장된 카드로 자동 결제. True=성공, None=카드없음, str=에러"""
-    if not session.get("card_saved"):
-        return None
-    try:
-        srt_bot.pay_reservation(
-            srt, reservation,
-            card_number=session["card_number"],
-            card_password=session["card_password"],
-            card_validation_number=session["card_validation"],
-            card_expire_date=session["card_expire"],
-            installment=int(session.get("card_installment", 0)),
-        )
-        return True
-    except Exception as e:
-        return str(e)
-
-
 def _get_card_info_from_session():
-    """현재 세션의 카드 정보를 dict로 반환 (백그라운드 스레드에 전달용)"""
+    """현재 세션의 카드 정보를 dict로 반환 (백그라운드 스레드에 전달용, SRT 전용)"""
     if not session.get("card_saved"):
         return None
     return {
-        "card_number": session.get("card_number"),
-        "card_password": session.get("card_password"),
+        "card_number":    session.get("card_number"),
+        "card_password":  session.get("card_password"),
         "card_validation": session.get("card_validation"),
-        "card_expire": session.get("card_expire"),
+        "card_expire":    session.get("card_expire"),
         "card_installment": int(session.get("card_installment", 0)),
     }
 
@@ -73,12 +65,15 @@ def _get_card_info_from_session():
 # 백그라운드 모니터 스레드
 # ──────────────────────────────────────────────
 
-def _run_monitor(monitor_id: str, srt_id: str, srt_pw: str,
+def _run_monitor(monitor_id: str, provider: str, train_id: str, train_pw: str,
                  dep: str, arr: str, date: str, time_str: str,
-                 train_dep_time: str, adult_count: int,
-                 seat_type: str, mode: str, interval: int,
-                 card_info: Optional[dict]):
+                 train_dep_time: str, train_name: str, dep_time_display: str,
+                 adult_count: int, seat_type: str, interval: int,
+                 card_info: Optional[dict], slack_url: str, ntfy_url: str = ""):
+
+    bot = _bot_module(provider)
     attempt = 0
+
     while True:
         with _monitor_lock:
             if _monitors.get(monitor_id, {}).get("status") != "running":
@@ -86,51 +81,70 @@ def _run_monitor(monitor_id: str, srt_id: str, srt_pw: str,
 
         attempt += 1
         try:
-            srt = srt_bot.login(srt_id, srt_pw)
-            trains = srt_bot.search_trains(srt, dep, arr, date, time_str, available_only=False)
+            client = bot.login(train_id, train_pw)
+            trains = bot.search_trains(client, dep, arr, date, time_str, available_only=False)
             target = next((t for t in trains if t.dep_time == train_dep_time), None)
 
             if target is None:
                 _update_monitor(monitor_id, attempt=attempt,
                                 message="해당 열차를 찾을 수 없습니다. 재시도 중...")
-            elif target.seat_available():
-                if mode == "notify":
-                    g = "일반실 가능" if target.general_seat_available() else ""
-                    s = "특실 가능"  if target.special_seat_available()  else ""
-                    seat_info = " / ".join(filter(None, [g, s]))
-                    _update_monitor(monitor_id, status="available",
-                                    seat_info=seat_info,
-                                    message=f"빈좌석 감지: {seat_info}")
-                    return
-                else:
-                    # 자동 예매
-                    reservation = srt_bot.make_reservation(srt, target, adult_count, seat_type)
+                time.sleep(interval)
+                continue
+
+            reserved = False
+
+            # ① 빈좌석 있음 → 즉시 예매 시도
+            if target.seat_available():
+                try:
+                    reservation = bot.make_reservation(client, target, adult_count, seat_type)
                     res_num = str(reservation.reservation_number)
-                    auto_paid = False
-                    pay_error = None
-                    if card_info:
-                        try:
-                            srt_bot.pay_reservation(
-                                srt, reservation,
-                                card_number=card_info["card_number"],
-                                card_password=card_info["card_password"],
-                                card_validation_number=card_info["card_validation"],
-                                card_expire_date=card_info["card_expire"],
-                                installment=card_info["card_installment"],
-                            )
-                            auto_paid = True
-                        except Exception as e:
-                            pay_error = str(e)
-                    _update_monitor(monitor_id, status="done",
+                    _update_monitor(monitor_id, status="done", result_type="reservation",
                                     reservation_number=res_num,
-                                    auto_paid=auto_paid, pay_error=pay_error,
-                                    message="예매 완료" + (" + 결제 완료" if auto_paid else ""))
+                                    message=f"예매 완료 (예약번호: {res_num})")
+                    slack_notifier.send(
+                        slack_url, provider, "예매",
+                        dep, arr, train_name, dep_time_display, res_num,
+                        is_background=True,
+                    )
+                    ntfy_notifier.send(
+                        ntfy_url, provider, "예매",
+                        dep, arr, train_name, dep_time_display, res_num,
+                        is_background=True,
+                    )
                     return
-            else:
-                g = "일반실 매진" if not target.general_seat_available() else "일반실 가능"
-                s = "특실 매진"  if not target.special_seat_available()  else "특실 가능"
-                _update_monitor(monitor_id, attempt=attempt,
-                                message=f"[{attempt}회] 잔여석 없음 ({g} / {s})")
+                except Exception:
+                    pass  # 예매 실패 → 예약대기 시도
+
+            # ② 예약대기 가능 → 예약대기 등록 시도
+            waiting_ok = (
+                hasattr(target, "waiting_available") and target.waiting_available()
+            )
+            if not reserved and waiting_ok:
+                try:
+                    reservation = bot.make_waiting_reservation(client, target, adult_count, seat_type)
+                    res_num = str(reservation.reservation_number)
+                    _update_monitor(monitor_id, status="done", result_type="waiting",
+                                    reservation_number=res_num,
+                                    message=f"예약대기 등록 완료 (예약번호: {res_num})")
+                    slack_notifier.send(
+                        slack_url, provider, "예약대기",
+                        dep, arr, train_name, dep_time_display, res_num,
+                        is_background=True,
+                    )
+                    ntfy_notifier.send(
+                        ntfy_url, provider, "예약대기",
+                        dep, arr, train_name, dep_time_display, res_num,
+                        is_background=True,
+                    )
+                    return
+                except Exception:
+                    pass  # 예약대기도 실패 → 재시도
+
+            # ③ 모두 불가 → 재시도
+            g = "일반실 매진" if not target.general_seat_available() else "일반실 가능"
+            s = "특실 매진"   if not target.special_seat_available() else "특실 가능"
+            _update_monitor(monitor_id, attempt=attempt,
+                            message=f"[{attempt}회] 잔여석 없음 ({g} / {s})")
 
         except Exception as e:
             _update_monitor(monitor_id, attempt=attempt,
@@ -145,36 +159,40 @@ def _update_monitor(monitor_id: str, **kwargs):
             _monitors[monitor_id].update(kwargs)
 
 
-def _start_monitor(srt_id, srt_pw, dep, arr, date, time_str,
-                   train_dep_time, adult_count, seat_type,
-                   mode, interval, card_info,
-                   train_name, dep_time_display) -> str:
+def _start_monitor(provider, train_id, train_pw,
+                   dep, arr, date, time_str,
+                   train_dep_time, train_name, dep_time_display,
+                   adult_count, seat_type, interval,
+                   card_info, slack_url, ntfy_url="") -> str:
     monitor_id = str(uuid.uuid4())
     with _monitor_lock:
         _monitors[monitor_id] = {
-            "srt_id": srt_id,
-            "status": "running",
-            "mode": mode,
-            "dep": dep, "arr": arr,
-            "date": date, "time_str": time_str,
-            "train_name": train_name,
+            "train_id":         train_id,
+            "provider":         provider,
+            "status":           "running",
+            "dep":              dep,
+            "arr":              arr,
+            "date":             date,
+            "time_str":         time_str,
+            "train_name":       train_name,
             "dep_time_display": dep_time_display,
             "train_dep_time_raw": train_dep_time,
-            "seat_type": seat_type,
-            "adult_count": adult_count,
-            "interval": interval,
-            "attempt": 0,
-            "message": "모니터링 시작 중...",
+            "seat_type":        seat_type,
+            "adult_count":      adult_count,
+            "interval":         interval,
+            "attempt":          0,
+            "message":          "모니터링 시작 중...",
             "reservation_number": None,
-            "auto_paid": False,
-            "pay_error": None,
-            "seat_info": None,
-            "created_at": datetime.now().strftime("%m/%d %H:%M"),
+            "result_type":      None,   # "reservation" | "waiting"
+            "created_at":       datetime.now().strftime("%m/%d %H:%M"),
         }
     t = threading.Thread(
         target=_run_monitor,
-        args=(monitor_id, srt_id, srt_pw, dep, arr, date, time_str,
-              train_dep_time, adult_count, seat_type, mode, interval, card_info),
+        args=(monitor_id, provider, train_id, train_pw,
+              dep, arr, date, time_str,
+              train_dep_time, train_name, dep_time_display,
+              adult_count, seat_type, interval,
+              card_info, slack_url, ntfy_url),
         daemon=True,
     )
     t.start()
@@ -182,29 +200,33 @@ def _start_monitor(srt_id, srt_pw, dep, arr, date, time_str,
 
 
 # ──────────────────────────────────────────────
-# 라우트
+# 라우트 — 인증
 # ──────────────────────────────────────────────
 
 @app.route("/")
 def index():
-    if session.get("srt_id"):
+    if session.get("train_id"):
         return redirect(url_for("search"))
     return render_template("login.html")
 
 
 @app.route("/login", methods=["POST"])
 def login():
-    srt_id = request.form.get("srt_id", "").strip()
-    srt_pw = request.form.get("srt_pw", "").strip()
-    if not srt_id or not srt_pw:
-        return render_template("login.html", error="아이디와 비밀번호를 입력해주세요.")
+    provider = request.form.get("provider", "srt")
+    train_id = request.form.get("train_id", "").strip()
+    train_pw = request.form.get("train_pw", "").strip()
+
+    if not train_id or not train_pw:
+        return render_template("login.html", error="아이디와 비밀번호를 입력해주세요.", provider=provider)
+
     try:
-        srt_bot.login(srt_id, srt_pw)
-        session["srt_id"] = srt_id
-        session["srt_pw"] = srt_pw
+        _bot_module(provider).login(train_id, train_pw)
+        session["train_id"] = train_id
+        session["train_pw"] = train_pw
+        session["provider"] = provider
         return redirect(url_for("search"))
     except Exception as e:
-        return render_template("login.html", error=f"로그인 실패: {e}")
+        return render_template("login.html", error=f"로그인 실패: {e}", provider=provider)
 
 
 @app.route("/logout")
@@ -213,40 +235,51 @@ def logout():
     return redirect(url_for("index"))
 
 
+# ──────────────────────────────────────────────
+# 라우트 — 열차 검색 / 예매
+# ──────────────────────────────────────────────
+
 @app.route("/search")
 def search():
-    if not session.get("srt_id"):
+    if not session.get("train_id"):
         return redirect(url_for("index"))
-    return render_template("search.html", stations=srt_bot.STATIONS)
+    provider = session.get("provider", "srt")
+    stations = srt_bot.STATIONS if provider == "srt" else korail_bot.STATIONS
+    return render_template("search.html", stations=stations, provider=provider)
 
 
 @app.route("/search", methods=["POST"])
 def search_post():
-    if not session.get("srt_id"):
+    if not session.get("train_id"):
         return redirect(url_for("index"))
 
-    dep = request.form.get("dep")
-    arr = request.form.get("arr")
-    date = request.form.get("date", "").replace("-", "")
+    provider = session.get("provider", "srt")
+    stations = srt_bot.STATIONS if provider == "srt" else korail_bot.STATIONS
+
+    dep      = request.form.get("dep")
+    arr      = request.form.get("arr")
+    date     = request.form.get("date", "").replace("-", "")
     time_str = request.form.get("time", "00:00").replace(":", "") + "00"
 
-    srt = get_srt()
-    if not srt:
+    client = get_client()
+    if not client:
         return render_template("login.html", error="세션이 만료됐습니다. 다시 로그인해주세요.")
 
+    bot = _bot_module(provider)
     try:
-        trains = srt_bot.search_trains(srt, dep, arr, date, time_str)
+        trains = bot.search_trains(client, dep, arr, date, time_str)
     except Exception as e:
-        return render_template("search.html", stations=srt_bot.STATIONS, error=str(e))
+        return render_template("search.html", stations=stations, provider=provider,
+                               error=str(e), dep=dep, arr=arr, date=date, time=time_str[:4])
 
     session["search_params"] = {"dep": dep, "arr": arr, "date": date, "time": time_str}
-    return render_template("search.html", stations=srt_bot.STATIONS, trains=trains,
-                           dep=dep, arr=arr, date=date, time=time_str[:4])
+    return render_template("search.html", stations=stations, provider=provider,
+                           trains=trains, dep=dep, arr=arr, date=date, time=time_str[:4])
 
 
 @app.route("/reserve", methods=["POST"])
 def reserve():
-    if not session.get("srt_id"):
+    if not session.get("train_id"):
         return redirect(url_for("index"))
 
     # 중복 제출 방지
@@ -257,99 +290,104 @@ def reserve():
                                success=False)
     session["last_submit_token"] = submit_token
 
-    params = session.get("search_params", {})
-    dep      = params.get("dep")
-    arr      = params.get("arr")
-    date     = params.get("date")
-    time_str = params.get("time")
+    provider    = session.get("provider", "srt")
+    params      = session.get("search_params", {})
+    dep         = params.get("dep")
+    arr         = params.get("arr")
+    date        = params.get("date")
+    time_str    = params.get("time")
     train_idx   = int(request.form.get("train_idx", 0))
     seat_type   = request.form.get("seat_type", "GENERAL_FIRST")
     adult_count = int(request.form.get("adult_count", 1))
     interval    = int(request.form.get("interval", 3))
-    mode        = request.form.get("mode", "reserve")
 
-    srt = get_srt()
-    if not srt:
+    client = get_client()
+    if not client:
         return render_template("login.html", error="세션이 만료됐습니다. 다시 로그인해주세요.")
 
+    bot = _bot_module(provider)
     try:
-        trains = srt_bot.search_trains(srt, dep, arr, date, time_str)
+        trains = bot.search_trains(client, dep, arr, date, time_str)
         train  = trains[train_idx]
     except Exception as e:
         return render_template("reserve_result.html", error=str(e), success=False)
 
-    # 잔여석 있고 자동예매 모드 → 즉시 예매
-    if train.seat_available() and mode == "reserve":
+    slack_url = session.get("slack_webhook_url") or os.environ.get("SLACK_WEBHOOK_URL", "")
+    ntfy_url  = session.get("ntfy_topic_url")  or os.environ.get("NTFY_TOPIC_URL", "")
+
+    # 잔여석 있음 → 즉시 예매
+    if train.seat_available():
         try:
-            reservation = srt_bot.make_reservation(srt, train, adult_count, seat_type)
-            session["reservation_id"] = str(reservation.reservation_number)
-            pay_result = auto_pay_if_saved(srt, reservation)
-            return render_template(
-                "reserve_result.html", reservation=reservation, success=True,
-                pay_success=(pay_result is True),
-                pay_error=(pay_result if isinstance(pay_result, str) else None),
+            reservation = bot.make_reservation(client, train, adult_count, seat_type)
+            dep_time_disp = f"{train.dep_time[:2]}:{train.dep_time[2:4]}"
+            res_num = str(reservation.reservation_number)
+            slack_notifier.send(
+                slack_url, provider, "예매",
+                dep, arr, train.train_name, dep_time_disp, res_num,
             )
+            ntfy_notifier.send(
+                ntfy_url, provider, "예매",
+                dep, arr, train.train_name, dep_time_disp, res_num,
+            )
+            return render_template("reserve_result.html", reservation=reservation,
+                                   success=True, provider=provider)
         except Exception as e:
             return render_template("reserve_result.html", error=str(e), success=False)
 
-    # 잔여석 있고 알림 모드 → 바로 알림
-    if train.seat_available() and mode == "notify":
-        flash(f"이미 잔여석이 있습니다! {train.dep_station_name}→{train.arr_station_name} "
-              f"{train.dep_time[:2]}:{train.dep_time[2:4]} 출발", "success")
-        return redirect(url_for("search"))
-
     # 잔여석 없음 → 백그라운드 모니터 등록
-    card_info = _get_card_info_from_session()
+    card_info = _get_card_info_from_session() if provider == "srt" else None
     monitor_id = _start_monitor(
-        srt_id=session["srt_id"], srt_pw=session["srt_pw"],
+        provider=provider,
+        train_id=session["train_id"],
+        train_pw=session["train_pw"],
         dep=dep, arr=arr, date=date, time_str=time_str,
         train_dep_time=train.dep_time,
-        adult_count=adult_count, seat_type=seat_type,
-        mode=mode, interval=interval, card_info=card_info,
         train_name=train.train_name,
         dep_time_display=train.dep_time[:2] + ":" + train.dep_time[2:4],
+        adult_count=adult_count, seat_type=seat_type,
+        interval=interval, card_info=card_info,
+        slack_url=slack_url, ntfy_url=ntfy_url,
     )
     return redirect(url_for("monitors"))
 
 
 # ──────────────────────────────────────────────
-# 모니터 관리 페이지
+# 모니터 관리
 # ──────────────────────────────────────────────
 
 @app.route("/monitors")
 def monitors():
-    if not session.get("srt_id"):
+    if not session.get("train_id"):
         return redirect(url_for("index"))
-    srt_id = session["srt_id"]
+    train_id = session["train_id"]
     with _monitor_lock:
         user_monitors = [
             {"id": mid, **m}
             for mid, m in _monitors.items()
-            if m.get("srt_id") == srt_id
+            if m.get("train_id") == train_id
         ]
-    # 최신순 정렬
     user_monitors.sort(key=lambda x: x.get("created_at", ""), reverse=True)
     return render_template("monitors.html", monitors=user_monitors)
 
 
 @app.route("/api/monitor/<monitor_id>/status")
 def monitor_status(monitor_id: str):
-    if not session.get("srt_id"):
+    if not session.get("train_id"):
         return jsonify({"status": "error", "message": "로그인 필요"})
     with _monitor_lock:
         m = _monitors.get(monitor_id)
-    if not m or m.get("srt_id") != session["srt_id"]:
+    if not m or m.get("train_id") != session["train_id"]:
         return jsonify({"status": "error", "message": "모니터를 찾을 수 없습니다."})
-    return jsonify({k: v for k, v in m.items() if k != "srt_id"})
+    return jsonify({k: v for k, v in m.items() if k != "train_id"})
 
 
 @app.route("/api/monitor/<monitor_id>/cancel", methods=["POST"])
 def monitor_cancel(monitor_id: str):
-    if not session.get("srt_id"):
+    if not session.get("train_id"):
         return jsonify({"ok": False})
     with _monitor_lock:
         m = _monitors.get(monitor_id)
-        if m and m.get("srt_id") == session["srt_id"]:
+        if m and m.get("train_id") == session["train_id"]:
             m["status"] = "cancelled"
             m["message"] = "사용자가 취소했습니다."
     return jsonify({"ok": True})
@@ -357,30 +395,30 @@ def monitor_cancel(monitor_id: str):
 
 @app.route("/api/monitor/<monitor_id>/delete", methods=["POST"])
 def monitor_delete(monitor_id: str):
-    if not session.get("srt_id"):
+    if not session.get("train_id"):
         return jsonify({"ok": False})
     with _monitor_lock:
         m = _monitors.get(monitor_id)
-        if m and m.get("srt_id") == session["srt_id"]:
+        if m and m.get("train_id") == session["train_id"]:
             del _monitors[monitor_id]
     return jsonify({"ok": True})
 
 
 # ──────────────────────────────────────────────
-# 카드 설정
+# 카드 설정 (SRT 전용, 백엔드 유지)
 # ──────────────────────────────────────────────
 
 @app.route("/card", methods=["GET", "POST"])
 def card_settings():
-    if not session.get("srt_id"):
+    if not session.get("train_id"):
         return redirect(url_for("index"))
 
     if request.method == "POST":
-        card_number    = request.form.get("card_number", "").replace("-", "").replace(" ", "")
-        card_password  = request.form.get("card_password", "")
+        card_number     = request.form.get("card_number", "").replace("-", "").replace(" ", "")
+        card_password   = request.form.get("card_password", "")
         card_validation = request.form.get("card_validation", "")
-        card_expire    = request.form.get("card_expire", "").replace("/", "")
-        installment    = request.form.get("installment", "0")
+        card_expire     = request.form.get("card_expire", "").replace("/", "")
+        installment     = request.form.get("installment", "0")
 
         if len(card_number) != 16 or not card_number.isdigit():
             return render_template("card.html", error="카드번호는 16자리 숫자여야 합니다.",
@@ -392,12 +430,12 @@ def card_settings():
             return render_template("card.html", error="유효기간은 YYMM 4자리 숫자여야 합니다.",
                                    saved=session.get("card_saved"))
 
-        session["card_number"]     = card_number
-        session["card_password"]   = card_password
-        session["card_validation"] = card_validation
-        session["card_expire"]     = card_expire
+        session["card_number"]      = card_number
+        session["card_password"]    = card_password
+        session["card_validation"]  = card_validation
+        session["card_expire"]      = card_expire
         session["card_installment"] = installment
-        session["card_saved"]      = True
+        session["card_saved"]       = True
         session.modified = True
         return render_template("card.html", saved=True,
                                card_number="*" * 12 + card_number[-4:],
@@ -421,36 +459,44 @@ def card_clear():
 
 
 # ──────────────────────────────────────────────
-# 결제
+# 결제 (SRT 전용, 백엔드 유지)
 # ──────────────────────────────────────────────
 
 @app.route("/pay", methods=["GET", "POST"])
 def pay():
-    if not session.get("srt_id"):
+    if not session.get("train_id"):
         return redirect(url_for("index"))
 
     if request.method == "GET":
-        res_id = request.args.get("res_id") or session.get("reservation_id")
+        res_id = request.args.get("res_id")
         return render_template("pay.html", reservation_id=res_id)
 
-    srt = get_srt()
-    if not srt:
+    client = get_client()
+    if not client:
         return render_template("login.html", error="세션이 만료됐습니다. 다시 로그인해주세요.")
 
-    res_number     = request.form.get("reservation_id")
-    card_number    = request.form.get("card_number", "").replace("-", "").replace(" ", "")
-    card_password  = request.form.get("card_password")
+    res_number      = request.form.get("reservation_id")
+    card_number     = request.form.get("card_number", "").replace("-", "").replace(" ", "")
+    card_password   = request.form.get("card_password")
     card_validation = request.form.get("card_validation")
-    card_expire    = request.form.get("card_expire", "").replace("/", "")
-    installment    = int(request.form.get("installment", 0))
+    card_expire     = request.form.get("card_expire", "").replace("/", "")
+    installment     = int(request.form.get("installment", 0))
+
+    def _norm(n):
+        """예약번호를 숫자 문자열로 정규화 (앞자리 0, 공백 차이 허용)"""
+        return str(n or "").strip().lstrip("0")
 
     try:
-        reservations = srt_bot.get_reservations(srt)
-        target = next((r for r in reservations if str(r.reservation_number) == str(res_number)), None)
+        reservations = srt_bot.get_reservations(client)
+        target = next(
+            (r for r in reservations if _norm(r.reservation_number) == _norm(res_number)),
+            None,
+        )
         if not target:
+            found = ", ".join(str(r.reservation_number) for r in reservations) or "없음"
             return render_template("pay.html", reservation_id=res_number,
-                                   error="예매 내역을 찾을 수 없습니다.")
-        srt_bot.pay_reservation(srt, target, card_number, card_password,
+                                   error=f"예매 내역을 찾을 수 없습니다. (조회된 예약번호: {found})")
+        srt_bot.pay_reservation(client, target, card_number, card_password,
                                 card_validation, card_expire, installment)
         return render_template("pay.html", reservation_id=res_number, success=True)
     except Exception as e:
@@ -463,34 +509,38 @@ def pay():
 
 @app.route("/reservations")
 def reservations():
-    if not session.get("srt_id"):
+    if not session.get("train_id"):
         return redirect(url_for("index"))
-    srt = get_srt()
+    provider = session.get("provider", "srt")
+    client = get_client()
     items = []
     error = None
-    if srt:
+    if client:
         try:
-            items = srt_bot.get_reservations(srt)
+            items = _bot_module(provider).get_reservations(client)
         except Exception as e:
             error = str(e)
-    return render_template("reservations.html", reservations=items, error=error)
+    return render_template("reservations.html", reservations=items, error=error,
+                           provider=provider)
 
 
 @app.route("/cancel/<res_number>", methods=["POST"])
 def cancel(res_number):
-    if not session.get("srt_id"):
+    if not session.get("train_id"):
         return redirect(url_for("index"))
-    srt = get_srt()
-    if not srt:
+    provider = session.get("provider", "srt")
+    client = get_client()
+    if not client:
         return redirect(url_for("reservations"))
     try:
-        reservations_list = srt_bot.get_reservations(srt)
+        bot = _bot_module(provider)
+        reservations_list = bot.get_reservations(client)
         target = next((r for r in reservations_list
                        if str(r.reservation_number) == res_number), None)
         if not target:
             flash(f"예약번호 {res_number}을(를) 찾을 수 없습니다.", "error")
         else:
-            srt_bot.cancel_reservation(srt, target)
+            bot.cancel_reservation(client, target)
             flash("예매가 취소됐습니다.", "success")
     except Exception as e:
         flash(f"취소 실패: {e}", "error")
@@ -498,7 +548,7 @@ def cancel(res_number):
 
 
 # ──────────────────────────────────────────────
-# 예매 결과
+# 예매 결과 (직접 접근 방어)
 # ──────────────────────────────────────────────
 
 @app.route("/reserve/result")
